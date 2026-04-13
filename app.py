@@ -116,11 +116,45 @@ m2.metric("👥 Avg/Room", f"{avg_occ:.1f}")
 
 # Convert raw data pings into actionable "Hours" safely
 mask['Date'] = mask['Timestamp'].dt.date
-
-# Create a variable for the group to keep lines short
 g_cols = ['Date', 'Hour', 'Room Name']
 
 unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
 hvac_work_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
 hvac_night_hrs = mask[mask['HVAC_Night_Waste']].groupby(g_cols).ngroups
 hvac_wknd_hrs = mask[mask['HVAC_Weekend_Waste']].groupby(g_cols).ngroups
+
+m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs", delta="- Empty (9-6)", delta_color="inverse")
+m4.metric("☀️ HVAC (Day)", f"{hvac_work_hrs} Hrs", delta="- Wkdy 9-6", delta_color="inverse")
+m5.metric("🌙 HVAC (Night)", f"{hvac_night_hrs} Hrs", delta="- Wkdy Night", delta_color="inverse")
+m6.metric("🛋️ HVAC (Wknd)", f"{hvac_wknd_hrs} Hrs", delta="- Sat/Sun", delta_color="inverse")
+
+# 7. Efficiency Cards
+st.write("### 🏢 Room Efficiency Analysis")
+c1, c2, c3 = st.columns(3)
+
+def draw_card(col, title, df_sub, cap_label):
+    with col:
+        with st.container(border=True):
+            st.write(f"**{title}**")
+            avg_p = df_sub['Occupancy'].mean() if not df_sub.empty else 0.0
+            avg_cap = df_sub['Capacity'].mean() if not df_sub.empty else 1.0
+            
+            # Catch NaN or zero capacity issues safely
+            if pd.isna(avg_p): avg_p = 0.0
+            if pd.isna(avg_cap) or avg_cap <= 0: avg_cap = 1.0
+            
+            st.metric("Avg People", f"{avg_p:.1f}", delta=f"{cap_label} Max", delta_color="off")
+            st.progress(max(0.0, min((avg_p / avg_cap), 1.0)))
+
+draw_card(c1, "Small (1-4)", mask[mask['Capacity'] <= 4], "4")
+draw_card(c2, "Medium (5-8)", mask[(mask['Capacity'] > 4) & (mask['Capacity'] <= 8)], "8")
+draw_card(c3, "Large (9-20)", mask[mask['Capacity'] > 8], "20")
+
+# 8. Trends Chart
+st.write("### 📈 Occupancy Trends")
+if not mask.empty and 'Timestamp' in mask.columns and 'Occupancy' in mask.columns:
+    fig = px.line(mask, x="Timestamp", y="Occupancy", color="Room Name", line_shape='spline')
+    fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Insufficient data to display Occupancy Trends.")
