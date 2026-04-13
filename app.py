@@ -118,15 +118,28 @@ m2.metric("👥 Avg/Room", f"{avg_occ:.1f}")
 mask['Date'] = mask['Timestamp'].dt.date
 g_cols = ['Date', 'Hour', 'Room Name']
 
+# Calculate exact hours
 unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
 hvac_work_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
 hvac_night_hrs = mask[mask['HVAC_Night_Waste']].groupby(g_cols).ngroups
 hvac_wknd_hrs = mask[mask['HVAC_Weekend_Waste']].groupby(g_cols).ngroups
 
-m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs", delta="- Empty (9-6)", delta_color="inverse")
-m4.metric("☀️ HVAC (Day)", f"{hvac_work_hrs} Hrs", delta="- Wkdy 9-6", delta_color="inverse")
-m5.metric("🌙 HVAC (Night)", f"{hvac_night_hrs} Hrs", delta="- Wkdy Night", delta_color="inverse")
-m6.metric("🛋️ HVAC (Wknd)", f"{hvac_wknd_hrs} Hrs", delta="- Sat/Sun", delta_color="inverse")
+# --- V3.0 Executive Storytelling Math ---
+# 1. Calculate Percentage of Dead Space
+total_work_hrs = mask[mask['Is_Work_Hour']].groupby(g_cols).ngroups
+unprod_pct = (unproductive_hrs / total_work_hrs * 100) if total_work_hrs > 0 else 0
+
+# 2. Monetize the HVAC Waste (Est. £2.50 per hour of commercial HVAC)
+cost_per_hr = 2.50
+cost_work = hvac_work_hrs * cost_per_hr
+cost_night = hvac_night_hrs * cost_per_hr
+cost_wknd = hvac_wknd_hrs * cost_per_hr
+
+# Display Monetized Metrics
+m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs", delta=f"- {unprod_pct:.1f}% of Work Hrs", delta_color="inverse")
+m4.metric("☀️ HVAC (Day)", f"{hvac_work_hrs} Hrs", delta=f"- £{cost_work:,.0f} Est. Loss", delta_color="inverse")
+m5.metric("🌙 HVAC (Night)", f"{hvac_night_hrs} Hrs", delta=f"- £{cost_night:,.0f} Est. Loss", delta_color="inverse")
+m6.metric("🛋️ HVAC (Wknd)", f"{hvac_wknd_hrs} Hrs", delta=f"- £{cost_wknd:,.0f} Est. Loss", delta_color="inverse")
 
 # 7. Efficiency Cards
 st.write("### 🏢 Room Efficiency Analysis")
