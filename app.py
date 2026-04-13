@@ -48,11 +48,15 @@ st.markdown('<div class="ai-box"><h4>✨ AI Executive Summary</h4><ul><li><b>Rea
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("🟢 Online Devices", len(snap[snap['Device Status'] == 'Online']))
 m2.metric("👥 Avg People/Room", f"{mask['Occupancy'].mean():.1f}")
-# V2.0 Metrics
-ghosts = len(mask[mask['Ghost_Meeting'] == True])
-hvac = len(mask[mask['HVAC_Waste'] == True])
-m3.metric("👻 Ghost Meetings", ghosts, delta="- Wasted Bookings", delta_color="inverse")
-m4.metric("🌱 HVAC Waste Flags", hvac, delta="- Energy Optimization", delta_color="inverse")
+# V2.0 Metrics (Converted to Hours)
+mask['Date'] = mask['Timestamp'].dt.date
+
+# Count unique hours where a room was flagged
+ghost_hours = mask[mask['Ghost_Meeting']].groupby(['Date', 'Hour', 'Room Name']).ngroups
+hvac_hours = mask[mask['HVAC_Waste']].groupby(['Date', 'Hour', 'Room Name']).ngroups
+
+m3.metric("👻 Ghost Meetings", f"{ghost_hours} Hrs", delta="- Wasted Bookings", delta_color="inverse")
+m4.metric("🌱 HVAC Waste", f"{hvac_hours} Hrs", delta="- Energy Optimization", delta_color="inverse")
 
 st.write("### 🏢 Room Efficiency Analysis")
 c1, c2, c3 = st.columns(3)
