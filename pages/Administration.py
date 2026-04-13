@@ -16,8 +16,32 @@ def load_data():
     return data
 
 df = load_data()
-snap = df.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
+valid_dates = df['Timestamp'].dropna()
 
+# --- GLOBALLY SYNCED SIDEBAR ---
+with st.sidebar:
+    st.markdown("<h1 style='color: #00d2b4;'>neat.</h1>", unsafe_allow_html=True)
+    loc_sel = st.selectbox("📍 Location", ["All"] + sorted(df['Location'].dropna().unique().tolist()), key="loc_filter")
+    
+    min_d = valid_dates.min().date()
+    max_d = valid_dates.max().date()
+    date_sel = st.date_input("📅 Date Range", value=(min_d, max_d), key="date_filter")
+    
+    room_pool = df[df['Location'] == loc_sel] if loc_sel != "All" else df
+    room_sel = st.multiselect("🚪 Rooms", sorted(room_pool['Room Name'].dropna().unique().tolist()), key="room_filter")
+
+mask = df.copy()
+if isinstance(date_sel, tuple) and len(date_sel) == 2:
+    mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
+elif isinstance(date_sel, tuple) and len(date_sel) == 1:
+    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
+
+if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
+if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
+
+snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
+
+# --- ADMIN UI ---
 st.title("🛠️ IT Administration & Operations")
 
 st.markdown('''<div style="background-color: #1e2129; border-left: 5px solid #00d2b4; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem;">
@@ -32,7 +56,7 @@ st.markdown('''<div style="background-color: #1e2129; border-left: 5px solid #00
 st.write("### 🚨 Pre-Failure Watchlist")
 watchlist = snap[(snap['Device Status'] == 'Online') & (snap['Risk Level'].isin(['Medium', 'High', 'Critical']))]
 if not watchlist.empty:
-    st.warning(f"Found {len(watchlist)} online devices reporting degraded risk levels. Dispatch IT for preventative maintenance.")
+    st.warning(f"Found {len(watchlist)} online devices reporting degraded risk levels in this location.")
     st.dataframe(watchlist[['Room Name', 'Location', 'Platform', 'Risk Level', 'Notes']], use_container_width=True, hide_index=True)
 else:
     st.success("No devices currently reporting elevated risk levels. Systems normal.")
@@ -51,9 +75,9 @@ with col_a:
 with col_b:
     with st.container(border=True):
         st.write("### 💰 Platform Licensing ROI")
-        st.write("Total occupied hours by platform. Use this to deprecate unused licenses.")
-        df['Date'] = df['Timestamp'].dt.date
-        roi_df = df[df['Occupancy'] > 0].groupby(['Platform', 'Date', 'Hour', 'Room Name']).size().reset_index()
+        st.write("Total occupied hours by platform for selected location.")
+        mask['Date'] = mask['Timestamp'].dt.date
+        roi_df = mask[mask['Occupancy'] > 0].groupby(['Platform', 'Date', 'Hour', 'Room Name']).size().reset_index()
         roi_summary = roi_df.groupby('Platform').size().reset_index(name='Occupied Hours')
         
         fig_roi = px.bar(roi_summary, x='Platform', y='Occupied Hours', color='Platform')
@@ -69,7 +93,10 @@ st.dataframe(fw_df, use_container_width=True, hide_index=True)
 
 st.write("### 📅 Maintenance Window Heatmap")
 d_ord = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-pivot = df.pivot_table(index='Day', columns='Hour', values='Occupancy', aggfunc='mean').reindex(d_ord)
-fig_h = px.imshow(pivot, aspect="auto", color_continuous_scale="Tealgrn")
-fig_h.update_layout(margin=dict(l=0, r=0, t=10, b=0))
-st.plotly_chart(fig_h, use_container_width=True)
+if not mask.empty:
+    pivot = mask.pivot_table(index='Day', columns='Hour', values='Occupancy', aggfunc='mean').reindex(d_ord)
+    fig_h = px.imshow(pivot, aspect="auto", color_continuous_scale="Tealgrn")
+    fig_h.update_layout(margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig_h, use_container_width=True)
+else:
+    st.info("No data available for the selected filters.")
