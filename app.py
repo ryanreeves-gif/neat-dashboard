@@ -57,17 +57,38 @@ if valid_dates.empty:
     st.error("No valid timestamps found.")
     st.stop()
 
-# 3. GLOBALLY SYNCED SIDEBAR (With Memory Keys)
+# --- GLOBALLY SYNCED SIDEBAR (With Permanent Memory) ---
+# 1. Initialize permanent memory vault
+if 'saved_loc' not in st.session_state: 
+    st.session_state['saved_loc'] = "All"
+if 'saved_dates' not in st.session_state: 
+    st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
+if 'saved_rooms' not in st.session_state: 
+    st.session_state['saved_rooms'] = []
+
+# 2. Update function to save changes to the vault instantly
+def save_selections():
+    st.session_state['saved_loc'] = st.session_state['loc_filter']
+    st.session_state['saved_dates'] = st.session_state['date_filter']
+    st.session_state['saved_rooms'] = st.session_state['room_filter']
+
 with st.sidebar:
     st.markdown("<h1 style='color: #00d2b4;'>neat.</h1>", unsafe_allow_html=True)
-    loc_sel = st.selectbox("📍 Location", ["All"] + sorted(df['Location'].dropna().unique().tolist()), key="loc_filter")
     
-    min_d = valid_dates.min().date()
-    max_d = valid_dates.max().date()
-    date_sel = st.date_input("📅 Date Range", value=(min_d, max_d), key="date_filter")
+    # Location
+    loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
+    loc_idx = loc_opts.index(st.session_state['saved_loc']) if st.session_state['saved_loc'] in loc_opts else 0
+    loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_idx, key="loc_filter", on_change=save_selections)
     
+    # Dates
+    date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
+    
+    # Rooms (Smart filter that drops invalid rooms if location changes)
     room_pool = df[df['Location'] == loc_sel] if loc_sel != "All" else df
-    room_sel = st.multiselect("🚪 Rooms", sorted(room_pool['Room Name'].dropna().unique().tolist()), key="room_filter")
+    room_opts = sorted(room_pool['Room Name'].dropna().unique().tolist())
+    valid_rooms = [r for r in st.session_state['saved_rooms'] if r in room_opts]
+    room_sel = st.multiselect("🚪 Rooms", room_opts, default=valid_rooms, key="room_filter", on_change=save_selections)
+# --- END SIDEBAR ---
 
 # 4. Filter Logic
 mask = df.copy()
