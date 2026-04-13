@@ -114,7 +114,13 @@ avg_occ = mask['Occupancy'].mean() if not mask.empty else 0
 m1.metric("🟢 Online", on_count)
 m2.metric("👥 Avg/Room", f"{avg_occ:.1f}")
 
-# Convert raw data pings into actionable "Hours"
+# Convert raw data pings into actionable "Hours" safely
 mask['Date'] = mask['Timestamp'].dt.date
-unproductive_hrs = mask[mask['Unproductive_Time']].groupby(['Date', 'Hour', 'Room Name']).ngroups
-hvac_work_hrs = mask[mask['HVAC_Work_Waste']].groupby(['Date', 'Hour', 'Room Name
+
+# Create a variable for the group to keep lines short
+g_cols = ['Date', 'Hour', 'Room Name']
+
+unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
+hvac_work_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
+hvac_night_hrs = mask[mask['HVAC_Night_Waste']].groupby(g_cols).ngroups
+hvac_wknd_hrs = mask[mask['HVAC_Weekend_Waste']].groupby(g_cols).ngroups
