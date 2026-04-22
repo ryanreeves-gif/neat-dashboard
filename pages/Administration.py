@@ -49,6 +49,10 @@ with st.sidebar:
     room_opts = sorted(room_pool['Room Name'].dropna().unique().tolist())
     valid_rooms = [r for r in st.session_state['saved_rooms'] if r in room_opts]
     room_sel = st.multiselect("🚪 Rooms", room_opts, default=valid_rooms, key="room_filter", on_change=save_selections)
+    st.markdown("---")
+    if st.button("🔄 Refresh Telemetry", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 # --- END SIDEBAR ---
 
 mask = df.copy()
