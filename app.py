@@ -152,23 +152,29 @@ m5.metric("🌙 HVAC (Night)", f"{hvac_nt} Hrs", delta=f"- £{hvac_nt * cost_per
 m6.metric("🛋️ HVAC (Wknd)", f"{hvac_we} Hrs", delta=f"- £{hvac_we * cost_per_hr:,.0f} Est. Loss", delta_color="inverse")
 
 # 7. Efficiency Cards
-st.write("### 🏢 Room Efficiency Analysis")
+st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
 c1, c2, c3 = st.columns(3)
+
+# Filter data to ONLY include Mon-Fri, 9am-6pm for realistic averages
+work_mask = mask[mask['Is_Work_Hour'] == True]
 
 def draw_card(col, title, df_sub, cap_label):
     with col:
         with st.container(border=True):
             st.write(f"**{title}**")
+            # Calculate average people during work hours
             avg_p = df_sub['Occupancy'].mean() if not df_sub.empty else 0.0
             avg_cap = df_sub['Capacity'].mean() if not df_sub.empty else 1.0
+            
             if pd.isna(avg_p): avg_p = 0.0
             if pd.isna(avg_cap) or avg_cap <= 0: avg_cap = 1.0
+            
             st.metric("Avg People", f"{avg_p:.1f}", delta=f"{cap_label} Max", delta_color="off")
             st.progress(max(0.0, min((avg_p / avg_cap), 1.0)))
 
-draw_card(c1, "Small (1-4)", mask[mask['Capacity'] <= 4], "4")
-draw_card(c2, "Medium (5-8)", mask[(mask['Capacity'] > 4) & (mask['Capacity'] <= 8)], "8")
-draw_card(c3, "Large (9-20)", mask[mask['Capacity'] > 8], "20")
+draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
+draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
+draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
 
 # 8. Wellness Section
 st.write("### 🌿 Environmental Health & Wellness")
