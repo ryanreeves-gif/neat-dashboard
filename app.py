@@ -63,7 +63,11 @@ def load_data():
 df = load_data()
 valid_dates = df['Timestamp'].dropna()
 
-# 3. Sidebar
+if valid_dates.empty:
+    st.error("No valid timestamps found.")
+    st.stop()
+
+# 3. GLOBALLY SYNCED SIDEBAR
 if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
 if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
 if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
@@ -85,10 +89,22 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-# 4. Filter Logic
+# 4. Filter Logic (Bulletproof Date Handling)
 mask = df.copy()
-if isinstance(date_sel, tuple) and len(date_sel) == 2:
-    mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
+
+if isinstance(date_sel, tuple):
+    if len(date_sel) == 2:
+        start_date, end_date = date_sel
+    elif len(date_sel) == 1:
+        start_date = end_date = date_sel[0]
+    else:
+        start_date = end_date = valid_dates.max().date()
+else:
+    start_date = end_date = date_sel
+
+# Apply the strict date filter
+mask = mask[(mask['Timestamp'].dt.date >= start_date) & (mask['Timestamp'].dt.date <= end_date)]
+
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
@@ -112,7 +128,7 @@ st.markdown(f"""
     <div class="ai-box">
         <h4 style="margin-top:0;">✨ AI Executive Summary</h4>
         <ul>
-            <li><b>Real Estate:</b> '{worst_unprod}' is identifying as a primary source of ghost-meeting waste.</li>
+            <li><b>Real Estate:</b> {'Room utilization is optimal for this period.' if worst_unprod == 'None' else f"'{worst_unprod}' is identifying as a primary source of ghost-meeting waste."}</li>
             <li><b>Sustainability:</b> HVAC waste identified. Potential savings of <b>£{total_waste_cost:,.0f}</b> discovered.</li>
             <li><b>Wellness:</b> {'High VOC levels detected in ' + worst_voc if worst_voc != "None" else "Air quality metrics are currently within healthy optimal ranges."}</li>
         </ul>
@@ -122,10 +138,10 @@ st.markdown(f"""
 # 6. Top Metrics (6 Columns)
 m1, m2, m3, m4, m5, m6 = st.columns(6)
 m1.metric("🟢 Online", len(snap[snap['Device Status'] == 'Online']))
-m2.metric("👥 Avg/Room", f"{mask[mask['Is_Work_Hour']]['Occupancy'].mean():.1f}")
+m2.metric("👥 Avg/Room", f"{mask[mask['Is_Work_Hour']]['Occupancy'].mean():.1f}" if not mask[mask['Is_Work_Hour']].empty else "0.0")
 m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs")
 m4.metric("☀️ HVAC Waste", f"£{total_waste_cost:,.0f}")
-m5.metric("🌬️ VOC Avg", f"{mask['VOC'].mean():.0f}")
+m5.metric("🌬️ VOC Avg", f"{mask['VOC'].mean():.0f}" if not mask.empty else "0")
 m6.metric("💡 Vampire Light", f"{mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups} Hrs")
 
 # 7. Efficiency Cards
@@ -147,7 +163,7 @@ draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
 draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
 draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
 
-# --- 8. THE RETURNED WELLNESS SECTION ---
+# 8. THE WELLNESS SECTION
 st.write("### 🌿 Environmental Health & Operations Risk")
 w1, w2, w3, w4 = st.columns(4)
 
@@ -167,15 +183,38 @@ with w3:
 with w4:
     with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_hrs} Hrs", "Empty but Lights ON", delta_color="inverse")
 
-# 9. Environmental Trends Tabs
+# 9. Environmental Trends Tabs (DYNAMIC X-AXIS FIX)
 st.write("### 📈 Full IoT Telemetry Trends")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity", "🌬️ VOC", "💡 Light Level"])
 
 def render_chart(tab, y_col):
     with tab:
-        if y_col in mask.columns:
+        if not mask.empty and y_col in mask.columns:
             fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
-            fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # --- DYNAMIC X-AXIS FORMATTING ---
+            if start_date == end_date:
+                # Single day selected: Show 24-hour time (e.g. 14:00)
+                x_format = "%H:%M" 
+                x_title = f"Time of Day ({start_date.strftime('%d %b %Y')})"
+            else:
+                # Multiple days selected: Show Date and Time
+                x_format = "%d %b\n%H:%M"
+                x_title = "Date & Time"
 
-render_chart(tab1, "Occupancy"); render_chart(tab2, "Temperature"); render_chart(tab3, "Humidity"); render_chart(tab4, "VOC"); render_chart(tab5, "Light Level")
+            fig.update_layout(
+                xaxis_title=x_title,
+                xaxis=dict(tickformat=x_format),
+                margin=dict(l=0, r=0, t=10, b=0), 
+                paper_bgcolor="rgba(0,0,0,0)", 
+                plot_bgcolor="rgba(0,0,0,0)"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info(f"No telemetry data available for the selected date range.")
+
+render_chart(tab1, "Occupancy")
+render_chart(tab2, "Temperature")
+render_chart(tab3, "Humidity")
+render_chart(tab4, "VOC")
+render_chart(tab5, "Light Level")
