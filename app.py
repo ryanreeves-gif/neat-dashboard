@@ -31,19 +31,12 @@ def load_data():
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
     
-    # Professional Platform Renaming
     platform_mapping = {
-        'msteams': 'Microsoft Teams',
-        'zoom': 'Zoom',
-        'google_meet': 'Google Meet',
-        'apphub': 'Neat App Hub',
-        'usb': 'BYOD (USB Mode)',
-        'avos': 'App Hub Partner',
-        'none': 'Unprovisioned'
+        'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet',
+        'apphub': 'Neat App Hub', 'usb': 'BYOD (USB Mode)', 'avos': 'App Hub Partner', 'none': 'Unprovisioned'
     }
     data['Platform'] = data['Platform'].replace(platform_mapping)
 
-    # Smart Capacity Fix
     if 'Capacity' in data.columns:
         data['Capacity'] = pd.to_numeric(data['Capacity'], errors='coerce')
     else:
@@ -53,7 +46,6 @@ def load_data():
     
     data['VOC'] = pd.to_numeric(data.get('VOC', 0), errors='coerce').fillna(0)
     data['Light Level'] = pd.to_numeric(data.get('Light Level', 0), errors='coerce').fillna(0)
-    
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
@@ -71,11 +63,7 @@ def load_data():
 df = load_data()
 valid_dates = df['Timestamp'].dropna()
 
-if valid_dates.empty:
-    st.error("No valid timestamps found.")
-    st.stop()
-
-# 3. GLOBALLY SYNCED SIDEBAR
+# 3. Sidebar
 if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
 if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
 if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
@@ -101,8 +89,6 @@ with st.sidebar:
 mask = df.copy()
 if isinstance(date_sel, tuple) and len(date_sel) == 2:
     mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
-elif isinstance(date_sel, tuple) and len(date_sel) == 1:
-    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
@@ -110,43 +96,33 @@ snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 # 5. Dashboard UI
 st.title("Room Analytics Dashboard")
 
-# --- DYNAMIC AI ENGINE ---
+# AI Logic
 mask['Date'] = mask['Timestamp'].dt.date
 g_cols = ['Date', 'Hour', 'Room Name']
 cost_per_hr = 2.50
-
 unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
 hvac_wk_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
 total_waste_cost = hvac_wk_hrs * cost_per_hr
 
-if unproductive_hrs > 0:
-    worst_unprod = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax()
-    unprod_text = f"<b>Real Estate:</b> '{worst_unprod}' is identifying as a primary source of ghost-meeting waste."
-else:
-    unprod_text = "<b>Real Estate:</b> Room utilization is currently efficient across the fleet."
-
-sust_text = f"<b>Sustainability:</b> HVAC waste identified. Potential savings of <b>£{total_waste_cost:,.0f}</b> discovered."
-
+worst_unprod = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax() if not mask[mask['Unproductive_Time']].empty else "None"
 high_voc_mask = mask[mask['VOC'] > 1000]
-if not high_voc_mask.empty:
-    worst_voc = high_voc_mask['Room Name'].value_counts().idxmax()
-    well_text = f"<b>Wellness:</b> High VOC levels in '{worst_voc}' detected. Recommend increasing fan speeds."
-else:
-    well_text = "<b>Wellness:</b> Air quality metrics are currently within healthy optimal ranges."
+worst_voc = high_voc_mask['Room Name'].value_counts().idxmax() if not high_voc_mask.empty else "None"
 
 st.markdown(f"""
     <div class="ai-box">
         <h4 style="margin-top:0;">✨ AI Executive Summary</h4>
-        <ul><li>{unprod_text}</li><li>{sust_text}</li><li>{well_text}</li></ul>
+        <ul>
+            <li><b>Real Estate:</b> '{worst_unprod}' is identifying as a primary source of ghost-meeting waste.</li>
+            <li><b>Sustainability:</b> HVAC waste identified. Potential savings of <b>£{total_waste_cost:,.0f}</b> discovered.</li>
+            <li><b>Wellness:</b> {'High VOC levels detected in ' + worst_voc if worst_voc != "None" else "Air quality metrics are currently within healthy optimal ranges."}</li>
+        </ul>
     </div>
     """, unsafe_allow_html=True)
 
 # 6. Top Metrics (6 Columns)
 m1, m2, m3, m4, m5, m6 = st.columns(6)
-on_count = len(snap[snap['Device Status'] == 'Online'])
-avg_occ = mask[mask['Is_Work_Hour']]['Occupancy'].mean() if not mask.empty else 0
-m1.metric("🟢 Online", on_count)
-m2.metric("👥 Avg/Room", f"{avg_occ:.1f}")
+m1.metric("🟢 Online", len(snap[snap['Device Status'] == 'Online']))
+m2.metric("👥 Avg/Room", f"{mask[mask['Is_Work_Hour']]['Occupancy'].mean():.1f}")
 m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs")
 m4.metric("☀️ HVAC Waste", f"£{total_waste_cost:,.0f}")
 m5.metric("🌬️ VOC Avg", f"{mask['VOC'].mean():.0f}")
@@ -171,7 +147,27 @@ draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
 draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
 draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
 
-# 8. Environmental Trends Tabs
+# --- 8. THE RETURNED WELLNESS SECTION ---
+st.write("### 🌿 Environmental Health & Operations Risk")
+w1, w2, w3, w4 = st.columns(4)
+
+avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean() if not mask.empty else 0
+good_aq = len(mask[mask['Air Quality'] == 'Good'])
+total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
+good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
+high_voc_hrs = mask[mask['VOC'] > 1000].groupby(g_cols).ngroups
+vampire_hrs = mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups
+
+with w1:
+    with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
+with w2:
+    with st.container(border=True): st.metric("🌬️ Air Quality (Good)", f"{good_aq_pct:.1f}%", "Target: >95%", delta_color="off")
+with w3:
+    with st.container(border=True): st.metric("⚠️ High VOC Risk", f"{high_voc_hrs} Hrs", "Cognitive Decline Risk", delta_color="inverse")
+with w4:
+    with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_hrs} Hrs", "Empty but Lights ON", delta_color="inverse")
+
+# 9. Environmental Trends Tabs
 st.write("### 📈 Full IoT Telemetry Trends")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity", "🌬️ VOC", "💡 Light Level"])
 
@@ -182,8 +178,4 @@ def render_chart(tab, y_col):
             fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
 
-render_chart(tab1, "Occupancy")
-render_chart(tab2, "Temperature")
-render_chart(tab3, "Humidity")
-render_chart(tab4, "VOC")
-render_chart(tab5, "Light Level")
+render_chart(tab1, "Occupancy"); render_chart(tab2, "Temperature"); render_chart(tab3, "Humidity"); render_chart(tab4, "VOC"); render_chart(tab5, "Light Level")
