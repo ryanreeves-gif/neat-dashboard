@@ -114,17 +114,54 @@ snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 
 # 5. Dashboard UI
 st.title("Room Analytics Dashboard")
+
+# --- DYNAMIC AI ENGINE LOGIC ---
+# Pre-calculate totals for the AI to "read"
+mask['Date'] = mask['Timestamp'].dt.date
+g_cols = ['Date', 'Hour', 'Room Name']
+cost_per_hr = 2.50
+
+unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
+hvac_wk = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
+hvac_nt = mask[mask['HVAC_Night_Waste']].groupby(g_cols).ngroups
+hvac_we = mask[mask['HVAC_Weekend_Waste']].groupby(g_cols).ngroups
+total_waste_cost = (hvac_wk + hvac_nt + hvac_we) * cost_per_hr
+
+# 1. Real Estate Insight
+if unproductive_hrs > 0:
+    worst_unprod_room = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax()
+    unprod_text = f"<b>Real Estate:</b> '{worst_unprod_room}' is our most underutilized asset in this selection. Consider repurposing it to maximize ROI."
+else:
+    unprod_text = "<b>Real Estate:</b> Room utilization is highly efficient across the selected range. No major ghost-meeting anomalies detected."
+
+# 2. Sustainability Insight
+if total_waste_cost > 0:
+    sust_text = f"<b>Sustainability:</b> We have identified <b>£{total_waste_cost:,.0f}</b> in estimated HVAC waste. Automating BMS shutdowns during nights/weekends will immediately recover this."
+else:
+    sust_text = "<b>Sustainability:</b> Zero HVAC waste detected for this selection. Building efficiency is optimal."
+
+# 3. Wellness Insight
+high_voc_mask = mask[mask['VOC'] > 1000]
+if not high_voc_mask.empty:
+    worst_voc_room = high_voc_mask['Room Name'].value_counts().idxmax()
+    well_text = f"<b>Wellness:</b> Critical warning: High VOCs detected frequently in '{worst_voc_room}'. Immediate HVAC ventilation check required to protect cognitive performance."
+else:
+    well_text = "<b>Wellness:</b> Air quality and VOC metrics are within healthy, optimal ranges. Low risk of cognitive fatigue."
+
+# Render the dynamic summary
 st.markdown(
-    """
+    f"""
     <div class="ai-box">
         <h4 style="margin-top:0;">✨ AI Executive Summary</h4>
         <ul>
-            <li><b>Real Estate:</b> Unproductive time identified. Consider repurposing consistently empty spaces.</li>
-            <li><b>Sustainability:</b> HVAC and Vampire Lighting waste categorized for immediate cost reduction.</li>
-            <li><b>Wellness:</b> Air quality and VOC levels tracked to protect employee cognitive performance.</li>
+            <li>{unprod_text}</li>
+            <li>{sust_text}</li>
+            <li>{well_text}</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
+
+# 6. Top Metrics (6 Columns)
 
 # 6. Top Metrics (6 Columns)
 m1, m2, m3, m4, m5, m6 = st.columns(6)
