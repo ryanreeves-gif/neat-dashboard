@@ -28,8 +28,23 @@ st.markdown(
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1bconB0u70BZv0aTblhhEA8_q56rlO6KAU1RG0P8yOjE/export?format=csv"
     data = pd.read_csv(url)
+    data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
-    data['Capacity'] = pd.to_numeric(data.get('Capacity', 4), errors='coerce').fillna(4)
+    
+    # --- SMART CAPACITY FIX ---
+    # 1. Convert to numbers, leaving blanks as NaN
+    if 'Capacity' in data.columns:
+        data['Capacity'] = pd.to_numeric(data['Capacity'], errors='coerce')
+    else:
+        data['Capacity'] = float('nan')
+        
+    # 2. Find the actual capacity for each room and apply it to ALL its pings
+    data['Capacity'] = data.groupby('Room Name')['Capacity'].transform('max')
+    
+    # 3. Only fallback to 4 if a room has NEVER had a capacity recorded at all
+    data['Capacity'] = data['Capacity'].fillna(4)
+    # --------------------------
+    
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
