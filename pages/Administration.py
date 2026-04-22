@@ -61,33 +61,42 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# 6. Fleet Health Heatmap (FIXED SIZING)
+# 6. Fleet Health Heatmap (CRASH FIX + SIZING FIX)
 st.write("### 🌍 Global Fleet Health Heatmap")
 st.write("Current status of all devices in the selected location. Click a square to investigate.")
+
+# Sanitize the hierarchy to prevent Plotly crashes (Handle NaNs and force Strings)
+tree_data = snap.copy()
+tree_data['Location'] = tree_data['Location'].fillna('Unassigned Location').astype(str)
+tree_data['Room Name'] = tree_data['Room Name'].fillna('Unknown Room').astype(str)
+tree_data['Root'] = "Global Fleet" # Add a stable root node
 
 # Map Risk Levels to Numbers for the Heatmap Colors
 status_map = {'Healthy': 3, 'Medium': 2, 'High': 1, 'Unknown': 0}
 
-# Fix: If offline, force High risk. Else use the map.
-snap['Health_Score'] = snap.apply(lambda x: 1 if x['Device Status'] == 'Offline' else status_map.get(x['Risk Level'], 0), axis=1)
+# If offline, force High risk. Else use the map.
+tree_data['Health_Score'] = tree_data.apply(lambda x: 1 if x['Device Status'] == 'Offline' else status_map.get(x['Risk Level'], 0), axis=1)
 
-# Fix: Add a dummy column so every room is exactly the same size on the grid
-snap['Grid_Size'] = 1 
+# Dummy column so every room is exactly the same size on the grid
+tree_data['Grid_Size'] = 1 
 
-fig_health = px.treemap(
-    snap, 
-    path=['Location', 'Room Name'], 
-    values='Grid_Size', # <--- The Bug Fix!
-    color='Health_Score',
-    color_continuous_scale=['#ff4b4b', '#ffa500', '#00d2b4'], # Red, Orange, Green
-    custom_data=['Device Status', 'Platform', 'Notes']
-)
+try:
+    fig_health = px.treemap(
+        tree_data, 
+        path=['Root', 'Location', 'Room Name'], # Using the sanitized columns
+        values='Grid_Size',
+        color='Health_Score',
+        color_continuous_scale=['#ff4b4b', '#ffa500', '#00d2b4'], # Red, Orange, Green
+        custom_data=['Device Status', 'Platform', 'Notes']
+    )
 
-fig_health.update_traces(
-    hovertemplate="<b>%{label}</b><br>Status: %{customdata[0]}<br>Platform: %{customdata[1]}<br>Issue: %{customdata[2]}"
-)
-fig_health.update_layout(margin=dict(t=0, l=0, r=0, b=0), coloraxis_showscale=False)
-st.plotly_chart(fig_health, use_container_width=True)
+    fig_health.update_traces(
+        hovertemplate="<b>%{label}</b><br>Status: %{customdata[0]}<br>Platform: %{customdata[1]}<br>Issue: %{customdata[2]}"
+    )
+    fig_health.update_layout(margin=dict(t=25, l=0, r=0, b=0), coloraxis_showscale=False)
+    st.plotly_chart(fig_health, use_container_width=True)
+except Exception as e:
+    st.error("Heatmap rendering paused: Waiting for complete location hierarchy data.")
 
 # 7. Licensing ROI
 st.write("---")
