@@ -33,7 +33,6 @@ def load_data():
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
-    # V2.2 Logic
     is_weekday = data['Day'].isin(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
     is_weekend = data['Day'].isin(['Saturday', 'Sunday'])
     is_daytime = (data['Hour'] >= 9) & (data['Hour'] < 18) # 9am to 5:59pm
@@ -57,8 +56,7 @@ if valid_dates.empty:
     st.error("No valid timestamps found.")
     st.stop()
 
-# --- GLOBALLY SYNCED SIDEBAR (With Permanent Memory) ---
-# 1. Initialize permanent memory vault
+# 3. GLOBALLY SYNCED SIDEBAR (With Permanent Memory)
 if 'saved_loc' not in st.session_state: 
     st.session_state['saved_loc'] = "All"
 if 'saved_dates' not in st.session_state: 
@@ -66,7 +64,6 @@ if 'saved_dates' not in st.session_state:
 if 'saved_rooms' not in st.session_state: 
     st.session_state['saved_rooms'] = []
 
-# 2. Update function to save changes to the vault instantly
 def save_selections():
     st.session_state['saved_loc'] = st.session_state['loc_filter']
     st.session_state['saved_dates'] = st.session_state['date_filter']
@@ -75,24 +72,21 @@ def save_selections():
 with st.sidebar:
     st.markdown("<h1 style='color: #00d2b4;'>neat.</h1>", unsafe_allow_html=True)
     
-    # Location
     loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
     loc_idx = loc_opts.index(st.session_state['saved_loc']) if st.session_state['saved_loc'] in loc_opts else 0
     loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_idx, key="loc_filter", on_change=save_selections)
     
-    # Dates
     date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
     
-    # Rooms (Smart filter that drops invalid rooms if location changes)
     room_pool = df[df['Location'] == loc_sel] if loc_sel != "All" else df
     room_opts = sorted(room_pool['Room Name'].dropna().unique().tolist())
     valid_rooms = [r for r in st.session_state['saved_rooms'] if r in room_opts]
     room_sel = st.multiselect("🚪 Rooms", room_opts, default=valid_rooms, key="room_filter", on_change=save_selections)
+    
     st.markdown("---")
     if st.button("🔄 Refresh Telemetry", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-# --- END SIDEBAR ---
 
 # 4. Filter Logic
 mask = df.copy()
@@ -151,57 +145,13 @@ m4.metric("☀️ HVAC (Day)", f"{hvac_wk} Hrs", delta=f"- £{hvac_wk * cost_per
 m5.metric("🌙 HVAC (Night)", f"{hvac_nt} Hrs", delta=f"- £{hvac_nt * cost_per_hr:,.0f} Est. Loss", delta_color="inverse")
 m6.metric("🛋️ HVAC (Wknd)", f"{hvac_we} Hrs", delta=f"- £{hvac_we * cost_per_hr:,.0f} Est. Loss", delta_color="inverse")
 
-# 7. Efficiency Cards
+# 7. Efficiency Cards (Fixed: Work Hours + When In Use Only)
 st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
 c1, c2, c3 = st.columns(3)
 
-# Filter data to ONLY include Mon-Fri, 9am-6pm for realistic averages
 work_mask = mask[mask['Is_Work_Hour'] == True]
 
 def draw_card(col, title, df_sub, cap_label):
     with col:
         with st.container(border=True):
-            st.write(f"**{title}**")
-            # Calculate average people during work hours
-            avg_p = df_sub['Occupancy'].mean() if not df_sub.empty else 0.0
-            avg_cap = df_sub['Capacity'].mean() if not df_sub.empty else 1.0
-            
-            if pd.isna(avg_p): avg_p = 0.0
-            if pd.isna(avg_cap) or avg_cap <= 0: avg_cap = 1.0
-            
-            st.metric("Avg People", f"{avg_p:.1f}", delta=f"{cap_label} Max", delta_color="off")
-            st.progress(max(0.0, min((avg_p / avg_cap), 1.0)))
-
-draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
-draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
-draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
-
-# 8. Wellness Section
-st.write("### 🌿 Environmental Health & Wellness")
-w1, w2, w3 = st.columns(3)
-mask['Humidity'] = pd.to_numeric(mask.get('Humidity', 0), errors='coerce').fillna(0)
-avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean()
-if pd.isna(avg_humidity): avg_humidity = 0
-
-good_aq = len(mask[mask['Air Quality'] == 'Good'])
-total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
-good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
-
-mask['Productivity_Risk'] = (mask['Occupancy'] > 0) & (mask['Air Quality'].isin(['Moderate', 'Poor']))
-risk_hrs = mask[mask['Productivity_Risk']].groupby(g_cols).ngroups
-
-with w1:
-    with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
-with w2:
-    with st.container(border=True): st.metric("🌬️ Air Quality (Good)", f"{good_aq_pct:.1f}%", "Target: >95%", delta_color="off")
-with w3:
-    with st.container(border=True): st.metric("⚠️ Productivity Risk", f"{risk_hrs} Hrs", "- Occupied + Poor Air", delta_color="inverse")
-
-# 9. Trends Chart
-st.write("### 📈 Occupancy Trends")
-if not mask.empty and 'Timestamp' in mask.columns and 'Occupancy' in mask.columns:
-    fig = px.line(mask, x="Timestamp", y="Occupancy", color="Room Name", line_shape='spline')
-    fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Insufficient data to display Occupancy Trends.")
+            st.write(f"**{title
