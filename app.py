@@ -31,26 +31,24 @@ def load_data():
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
     
-    # --- SMART CAPACITY FIX ---
-    # 1. Convert to numbers, leaving blanks as NaN
+    # Smart Capacity Fix
     if 'Capacity' in data.columns:
         data['Capacity'] = pd.to_numeric(data['Capacity'], errors='coerce')
     else:
         data['Capacity'] = float('nan')
-        
-    # 2. Find the actual capacity for each room and apply it to ALL its pings
     data['Capacity'] = data.groupby('Room Name')['Capacity'].transform('max')
-    
-    # 3. Only fallback to 4 if a room has NEVER had a capacity recorded at all
     data['Capacity'] = data['Capacity'].fillna(4)
-    # --------------------------
+    
+    # --- NEW: Safely load VOC and Light Level (Defaults to 0 if missing) ---
+    data['VOC'] = pd.to_numeric(data.get('VOC', 0), errors='coerce').fillna(0)
+    data['Light Level'] = pd.to_numeric(data.get('Light Level', 0), errors='coerce').fillna(0)
     
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
     is_weekday = data['Day'].isin(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
     is_weekend = data['Day'].isin(['Saturday', 'Sunday'])
-    is_daytime = (data['Hour'] >= 9) & (data['Hour'] < 18) # 9am to 5:59pm
+    is_daytime = (data['Hour'] >= 9) & (data['Hour'] < 18)
     
     data['Is_Work_Hour'] = is_weekday & is_daytime
     data['Is_Night_Hour'] = is_weekday & ~is_daytime
@@ -62,6 +60,9 @@ def load_data():
     data['HVAC_Night_Waste'] = hvac_base & data['Is_Night_Hour']
     data['HVAC_Weekend_Waste'] = hvac_base & data['Is_Weekend_Hour']
     
+    # --- NEW: Vampire Lighting (Empty room, but lights are ON > 50) ---
+    data['Vampire_Lighting'] = (data['Occupancy'] == 0) & (data['Light Level'] > 50)
+    
     return data
 
 df = load_data()
@@ -71,13 +72,10 @@ if valid_dates.empty:
     st.error("No valid timestamps found.")
     st.stop()
 
-# 3. GLOBALLY SYNCED SIDEBAR (With Permanent Memory)
-if 'saved_loc' not in st.session_state: 
-    st.session_state['saved_loc'] = "All"
-if 'saved_dates' not in st.session_state: 
-    st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
-if 'saved_rooms' not in st.session_state: 
-    st.session_state['saved_rooms'] = []
+# 3. GLOBALLY SYNCED SIDEBAR
+if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
+if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
+if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
 
 def save_selections():
     st.session_state['saved_loc'] = st.session_state['loc_filter']
@@ -110,38 +108,32 @@ if isinstance(date_sel, tuple) and len(date_sel) == 2:
 elif isinstance(date_sel, tuple) and len(date_sel) == 1:
     mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
 
-if loc_sel != "All": 
-    mask = mask[mask['Location'] == loc_sel]
-if room_sel: 
-    mask = mask[mask['Room Name'].isin(room_sel)]
-
+if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
+if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 
 # 5. Dashboard UI
 st.title("Room Analytics Dashboard")
-
 st.markdown(
     """
     <div class="ai-box">
         <h4 style="margin-top:0;">✨ AI Executive Summary</h4>
         <ul>
             <li><b>Real Estate:</b> Unproductive time identified. Consider repurposing consistently empty spaces.</li>
-            <li><b>Sustainability:</b> HVAC waste categorized. Adjust building management schedules for Nights and Weekends.</li>
-            <li><b>Wellness:</b> Air quality tracked against occupancy to ensure high cognitive performance.</li>
+            <li><b>Sustainability:</b> HVAC and Vampire Lighting waste categorized for immediate cost reduction.</li>
+            <li><b>Wellness:</b> Air quality and VOC levels tracked to protect employee cognitive performance.</li>
         </ul>
     </div>
-    """, 
-    unsafe_allow_html=True
-)
+    """, unsafe_allow_html=True)
 
-# 6. Top Metrics (6 Columns Monetized)
+# 6. Top Metrics (6 Columns)
 m1, m2, m3, m4, m5, m6 = st.columns(6)
 
 on_count = len(snap[snap['Device Status'] == 'Online']) if not snap.empty else 0
-avg_occ = mask['Occupancy'].mean() if not mask.empty else 0.0
+avg_occ = mask[mask['Is_Work_Hour']]['Occupancy'].mean() if not mask[mask['Is_Work_Hour']].empty else 0.0
 
 m1.metric("🟢 Online", on_count)
-m2.metric("👥 Avg/Room", f"{avg_occ:.1f}")
+m2.metric("👥 Avg/Room (9-6)", f"{avg_occ:.1f}")
 
 mask['Date'] = mask['Timestamp'].dt.date
 g_cols = ['Date', 'Hour', 'Room Name']
@@ -160,25 +152,20 @@ m4.metric("☀️ HVAC (Day)", f"{hvac_wk} Hrs", delta=f"- £{hvac_wk * cost_per
 m5.metric("🌙 HVAC (Night)", f"{hvac_nt} Hrs", delta=f"- £{hvac_nt * cost_per_hr:,.0f} Est. Loss", delta_color="inverse")
 m6.metric("🛋️ HVAC (Wknd)", f"{hvac_we} Hrs", delta=f"- £{hvac_we * cost_per_hr:,.0f} Est. Loss", delta_color="inverse")
 
-# 7. Efficiency Cards (Fixed: Work Hours + When In Use Only)
+# 7. Efficiency Cards
 st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
 c1, c2, c3 = st.columns(3)
-
 work_mask = mask[mask['Is_Work_Hour'] == True]
 
 def draw_card(col, title, df_sub, cap_label):
     with col:
         with st.container(border=True):
             st.write(f"**{title}**")
-            # Only calculate average when the room is actually occupied
             in_use_df = df_sub[df_sub['Occupancy'] > 0]
-            
             avg_p = in_use_df['Occupancy'].mean() if not in_use_df.empty else 0.0
             avg_cap = df_sub['Capacity'].mean() if not df_sub.empty else 1.0
-            
             if pd.isna(avg_p): avg_p = 0.0
             if pd.isna(avg_cap) or avg_cap <= 0: avg_cap = 1.0
-            
             st.metric("Avg People (When In Use)", f"{avg_p:.1f}", delta=f"{cap_label} Max", delta_color="off")
             st.progress(max(0.0, min((avg_p / avg_cap), 1.0)))
 
@@ -186,48 +173,44 @@ draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
 draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
 draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
 
-# 8. Wellness Section
-st.write("### 🌿 Environmental Health & Wellness")
-w1, w2, w3 = st.columns(3)
-mask['Humidity'] = pd.to_numeric(mask.get('Humidity', 0), errors='coerce').fillna(0)
-avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean()
+# 8. Wellness & Energy Expansion
+st.write("### 🌿 Environmental Health & Operations Risk")
+w1, w2, w3, w4 = st.columns(4)
+
+avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean() if not mask.empty else 0
 if pd.isna(avg_humidity): avg_humidity = 0
 
 good_aq = len(mask[mask['Air Quality'] == 'Good'])
 total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
 good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
 
-mask['Productivity_Risk'] = (mask['Occupancy'] > 0) & (mask['Air Quality'].isin(['Moderate', 'Poor']))
-risk_hrs = mask[mask['Productivity_Risk']].groupby(g_cols).ngroups
+vampire_hrs = mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups
+high_voc_hrs = mask[mask['VOC'] > 1000].groupby(g_cols).ngroups # Assuming > 1000 ppb is high
 
 with w1:
     with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
 with w2:
     with st.container(border=True): st.metric("🌬️ Air Quality (Good)", f"{good_aq_pct:.1f}%", "Target: >95%", delta_color="off")
 with w3:
-    with st.container(border=True): st.metric("⚠️ Productivity Risk", f"{risk_hrs} Hrs", "- Occupied + Poor Air", delta_color="inverse")
+    with st.container(border=True): st.metric("⚠️ High VOC Risk", f"{high_voc_hrs} Hrs", "Cognitive Decline Risk", delta_color="inverse")
+with w4:
+    with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_hrs} Hrs", "Empty but Lights ON", delta_color="inverse")
 
 # 9. Environmental & Occupancy Trends Tabs
-st.write("### 📈 Environmental & Occupancy Trends")
+st.write("### 📈 Full IoT Telemetry Trends")
 if not mask.empty and 'Timestamp' in mask.columns:
-    tab1, tab2, tab3 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity", "🌬️ VOC", "💡 Light Level"])
     
-    with tab1:
-        if 'Occupancy' in mask.columns:
-            fig_occ = px.line(mask, x="Timestamp", y="Occupancy", color="Room Name", line_shape='spline')
-            fig_occ.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_occ, use_container_width=True)
+    def render_chart(y_col):
+        if y_col in mask.columns:
+            fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
+            fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, use_container_width=True)
             
-    with tab2:
-        if 'Temperature' in mask.columns:
-            fig_temp = px.line(mask, x="Timestamp", y="Temperature", color="Room Name", line_shape='spline')
-            fig_temp.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_temp, use_container_width=True)
-            
-    with tab3:
-        if 'Humidity' in mask.columns:
-            fig_hum = px.line(mask, x="Timestamp", y="Humidity", color="Room Name", line_shape='spline')
-            fig_hum.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_hum, use_container_width=True)
+    with tab1: render_chart("Occupancy")
+    with tab2: render_chart("Temperature")
+    with tab3: render_chart("Humidity")
+    with tab4: render_chart("VOC")
+    with tab5: render_chart("Light Level")
 else:
-    st.info("Insufficient data to display Trends. Please adjust your filters.")
+    st.info("Insufficient data to display Trends.")
