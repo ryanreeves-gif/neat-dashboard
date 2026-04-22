@@ -2,19 +2,26 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Config & Theme
-st.set_page_config(page_title="Neat | Dashboard", layout="wide", page_icon="🟢")
+# 1. Config & Corporate Theme
+st.set_page_config(page_title="Neat | Analytics", layout="wide", page_icon="🟢")
 st.markdown(
     """
     <style>
+    /* Hide default Streamlit branding and raw file navigation */
     #MainMenu {visibility: hidden;} 
     footer {visibility: hidden;} 
+    header {visibility: hidden;}
+    [data-testid="stSidebarNav"] {display: none !important;}
+    
+    /* Sleek Corporate AI Box */
     .ai-box {
-        background-color: #1e2129; 
+        background-color: #15171c; 
+        border: 1px solid #2a2d37;
         border-left: 5px solid #00d2b4; 
         padding: 1.5rem; 
-        border-radius: 10px; 
+        border-radius: 8px; 
         margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     } 
     .ai-box h4, .ai-box li, .ai-box p { color: white !important; } 
     [data-testid='stMetricValue'] {color: #00d2b4 !important;}
@@ -67,7 +74,7 @@ if valid_dates.empty:
     st.error("No valid timestamps found.")
     st.stop()
 
-# 3. GLOBALLY SYNCED SIDEBAR
+# 3. GLOBALLY SYNCED SIDEBAR & BRANDED NAVIGATION
 if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
 if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
 if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
@@ -78,14 +85,28 @@ def save_selections():
     st.session_state['saved_rooms'] = st.session_state['room_filter']
 
 with st.sidebar:
-    st.markdown("<h1 style='color: #00d2b4;'>neat.</h1>", unsafe_allow_html=True)
+    # Corporate Branding Header
+    st.markdown("<h1 style='color: #00d2b4; font-size: 3.5rem; margin-bottom: 0; padding-bottom: 0; line-height: 1;'>neat.</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #888; font-size: 0.9rem; font-weight: 600; letter-spacing: 1px; margin-top: 0; margin-bottom: 30px;'>ENTERPRISE OPERATIONS</p>", unsafe_allow_html=True)
+    
+    # Custom Corporate Navigation Menu
+    st.markdown("<p style='color: #00d2b4; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>MENU</p>", unsafe_allow_html=True)
+    st.page_link("app.py", label="Analytics", icon="📊")
+    st.page_link("pages/Administration.py", label="Admin", icon="🛠️")
+    st.page_link("pages/AI_Search.py", label="AI Search", icon="🤖")
+    
+    st.markdown("---")
+    
+    # Standard Filters
+    st.markdown("<p style='color: #00d2b4; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>GLOBAL FILTERS</p>", unsafe_allow_html=True)
     loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
     loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_opts.index(st.session_state['saved_loc']), key="loc_filter", on_change=save_selections)
     date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
     room_opts = sorted(df['Room Name'].dropna().unique().tolist())
     room_sel = st.multiselect("🚪 Rooms", room_opts, default=st.session_state['saved_rooms'], key="room_filter", on_change=save_selections)
-    st.markdown("---")
-    if st.button("🔄 Refresh Telemetry", use_container_width=True):
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 Refresh Telemetry", use_container_width=True, type="primary"):
         st.cache_data.clear()
         st.rerun()
 
@@ -102,15 +123,13 @@ if isinstance(date_sel, tuple):
 else:
     start_date = end_date = date_sel
 
-# Apply the strict date filter
 mask = mask[(mask['Timestamp'].dt.date >= start_date) & (mask['Timestamp'].dt.date <= end_date)]
-
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 
 # 5. Dashboard UI
-st.title("Room Analytics Dashboard")
+st.title("Room Analytics")
 
 # AI Logic
 mask['Date'] = mask['Timestamp'].dt.date
@@ -191,14 +210,10 @@ def render_chart(tab, y_col):
     with tab:
         if not mask.empty and y_col in mask.columns:
             fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
-            
-            # --- DYNAMIC X-AXIS FORMATTING ---
             if start_date == end_date:
-                # Single day selected: Show 24-hour time (e.g. 14:00)
                 x_format = "%H:%M" 
                 x_title = f"Time of Day ({start_date.strftime('%d %b %Y')})"
             else:
-                # Multiple days selected: Show Date and Time
                 x_format = "%d %b\n%H:%M"
                 x_title = "Date & Time"
 
