@@ -31,7 +31,7 @@ def load_data():
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
     
-    # Platform Renaming
+    # Professional Platform Renaming
     platform_mapping = {
         'msteams': 'Microsoft Teams',
         'zoom': 'Zoom',
@@ -53,6 +53,7 @@ def load_data():
     
     data['VOC'] = pd.to_numeric(data.get('VOC', 0), errors='coerce').fillna(0)
     data['Light Level'] = pd.to_numeric(data.get('Light Level', 0), errors='coerce').fillna(0)
+    
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
@@ -70,43 +71,68 @@ def load_data():
 df = load_data()
 valid_dates = df['Timestamp'].dropna()
 
-# 3. Sidebar
+if valid_dates.empty:
+    st.error("No valid timestamps found.")
+    st.stop()
+
+# 3. GLOBALLY SYNCED SIDEBAR
 if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
 if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
 if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
 
+def save_selections():
+    st.session_state['saved_loc'] = st.session_state['loc_filter']
+    st.session_state['saved_dates'] = st.session_state['date_filter']
+    st.session_state['saved_rooms'] = st.session_state['room_filter']
+
 with st.sidebar:
     st.markdown("<h1 style='color: #00d2b4;'>neat.</h1>", unsafe_allow_html=True)
     loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
-    loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_opts.index(st.session_state['saved_loc']), key="loc_filter")
-    date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter")
+    loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_opts.index(st.session_state['saved_loc']), key="loc_filter", on_change=save_selections)
+    date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
     room_opts = sorted(df['Room Name'].dropna().unique().tolist())
-    room_sel = st.multiselect("🚪 Rooms", room_opts, default=st.session_state['saved_rooms'], key="room_filter")
+    room_sel = st.multiselect("🚪 Rooms", room_opts, default=st.session_state['saved_rooms'], key="room_filter", on_change=save_selections)
+    st.markdown("---")
     if st.button("🔄 Refresh Telemetry", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
-# 4. Filters
+# 4. Filter Logic
 mask = df.copy()
 if isinstance(date_sel, tuple) and len(date_sel) == 2:
     mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
+elif isinstance(date_sel, tuple) and len(date_sel) == 1:
+    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
+snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 
-# 5. UI - Dynamic AI Summary
+# 5. Dashboard UI
 st.title("Room Analytics Dashboard")
 
-# Calculation Logic for AI
-unproductive_hrs = mask[mask['Unproductive_Time']].shape[0]
-waste_cost = mask[mask['HVAC_Work_Waste']].shape[0] * 2.50
+# --- DYNAMIC AI ENGINE ---
+mask['Date'] = mask['Timestamp'].dt.date
+g_cols = ['Date', 'Hour', 'Room Name']
+cost_per_hr = 2.50
 
-# AI Content
-unprod_text = f"<b>Real Estate:</b> Underutilization identified. Consider repurposing empty spaces."
-if unproductive_hrs > 50:
-    unprod_text = f"<b>Real Estate:</b> High volume of 'Ghost Meetings' detected. Asset efficiency is currently sub-optimal."
+unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
+hvac_wk_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
+total_waste_cost = hvac_wk_hrs * cost_per_hr
 
-sust_text = f"<b>Sustainability:</b> HVAC and Vampire Lighting waste tracked. Potential savings: <b>£{waste_cost:,.0f}</b>."
-well_text = "<b>Wellness:</b> VOC and Air Quality levels are being monitored to ensure high cognitive performance."
+if unproductive_hrs > 0:
+    worst_unprod = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax()
+    unprod_text = f"<b>Real Estate:</b> '{worst_unprod}' is identifying as a primary source of ghost-meeting waste."
+else:
+    unprod_text = "<b>Real Estate:</b> Room utilization is currently efficient across the fleet."
+
+sust_text = f"<b>Sustainability:</b> HVAC waste identified. Potential savings of <b>£{total_waste_cost:,.0f}</b> discovered."
+
+high_voc_mask = mask[mask['VOC'] > 1000]
+if not high_voc_mask.empty:
+    worst_voc = high_voc_mask['Room Name'].value_counts().idxmax()
+    well_text = f"<b>Wellness:</b> High VOC levels in '{worst_voc}' detected. Recommend increasing fan speeds."
+else:
+    well_text = "<b>Wellness:</b> Air quality metrics are currently within healthy optimal ranges."
 
 st.markdown(f"""
     <div class="ai-box">
@@ -115,4 +141,49 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# ... [The rest of your Top Metrics and Efficiency Cards code remains the same]
+# 6. Top Metrics (6 Columns)
+m1, m2, m3, m4, m5, m6 = st.columns(6)
+on_count = len(snap[snap['Device Status'] == 'Online'])
+avg_occ = mask[mask['Is_Work_Hour']]['Occupancy'].mean() if not mask.empty else 0
+m1.metric("🟢 Online", on_count)
+m2.metric("👥 Avg/Room", f"{avg_occ:.1f}")
+m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs")
+m4.metric("☀️ HVAC Waste", f"£{total_waste_cost:,.0f}")
+m5.metric("🌬️ VOC Avg", f"{mask['VOC'].mean():.0f}")
+m6.metric("💡 Vampire Light", f"{mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups} Hrs")
+
+# 7. Efficiency Cards
+st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
+c1, c2, c3 = st.columns(3)
+work_mask = mask[mask['Is_Work_Hour'] == True]
+
+def draw_card(col, title, df_sub, cap_label):
+    with col:
+        with st.container(border=True):
+            st.write(f"**{title}**")
+            in_use_df = df_sub[df_sub['Occupancy'] > 0]
+            avg_p = in_use_df['Occupancy'].mean() if not in_use_df.empty else 0.0
+            avg_cap = df_sub['Capacity'].mean() if not df_sub.empty else 1.0
+            st.metric("Avg People (When In Use)", f"{avg_p:.1f}", delta=f"{cap_label} Max", delta_color="off")
+            st.progress(max(0.0, min((avg_p / avg_cap), 1.0)))
+
+draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
+draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
+draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
+
+# 8. Environmental Trends Tabs
+st.write("### 📈 Full IoT Telemetry Trends")
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity", "🌬️ VOC", "💡 Light Level"])
+
+def render_chart(tab, y_col):
+    with tab:
+        if y_col in mask.columns:
+            fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
+            fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, use_container_width=True)
+
+render_chart(tab1, "Occupancy")
+render_chart(tab2, "Temperature")
+render_chart(tab3, "Humidity")
+render_chart(tab4, "VOC")
+render_chart(tab5, "Light Level")
