@@ -30,19 +30,44 @@ def load_data():
     return data
 
 df = load_data()
+valid_dates = df['Timestamp'].dropna()
 
-# 3. Sidebar
+if valid_dates.empty:
+    st.error("No valid timestamps found.")
+    st.stop()
+
+# 3. GLOBALLY SYNCED SIDEBAR
+if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
+if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
+if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
+
+def save_selections():
+    st.session_state['saved_loc'] = st.session_state['loc_filter']
+    st.session_state['saved_dates'] = st.session_state['date_filter']
+    st.session_state['saved_rooms'] = st.session_state['room_filter']
+
 with st.sidebar:
     st.markdown("<h1 style='color: #00d2b4;'>neat.</h1>", unsafe_allow_html=True)
     loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
-    loc_sel = st.selectbox("📍 Location", loc_opts, index=0)
-    if st.button("🔄 Refresh Telemetry"):
+    loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_opts.index(st.session_state['saved_loc']), key="loc_filter", on_change=save_selections)
+    date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
+    room_opts = sorted(df['Room Name'].dropna().unique().tolist())
+    room_sel = st.multiselect("🚪 Rooms", room_opts, default=st.session_state['saved_rooms'], key="room_filter", on_change=save_selections)
+    st.markdown("---")
+    if st.button("🔄 Refresh Telemetry", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
-# 4. Logic
-mask = df[df['Location'] == loc_sel] if loc_sel != "All" else df
-# Get the absolute latest status for every room
+# 4. Filter Logic
+mask = df.copy()
+if isinstance(date_sel, tuple) and len(date_sel) == 2:
+    mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
+elif isinstance(date_sel, tuple) and len(date_sel) == 1:
+    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
+if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
+if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
+
+# Get the absolute latest status for every room based on the filtered data
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last').copy()
 
 # 5. UI
@@ -61,9 +86,10 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# 6. Fleet Health Heatmap (CRASH FIX + SIZING FIX)
+# 6. Fleet Health Heatmap
 st.write("### 🌍 Global Fleet Health Heatmap")
 st.write("Current status of all devices in the selected location. Click a square to investigate.")
+
 # Custom Legend for the Heatmap
 st.markdown(
     """
@@ -76,28 +102,26 @@ st.markdown(
     """, unsafe_allow_html=True
 )
 
-# Sanitize the hierarchy to prevent Plotly crashes (Handle NaNs and force Strings)
+# Sanitize the hierarchy to prevent Plotly crashes
 tree_data = snap.copy()
 tree_data['Location'] = tree_data['Location'].fillna('Unassigned Location').astype(str)
 tree_data['Room Name'] = tree_data['Room Name'].fillna('Unknown Room').astype(str)
-tree_data['Root'] = "Global Fleet" # Add a stable root node
+tree_data['Root'] = "Global Fleet" 
 
 # Map Risk Levels to Numbers for the Heatmap Colors
 status_map = {'Healthy': 3, 'Medium': 2, 'High': 1, 'Unknown': 0}
 
 # If offline, force High risk. Else use the map.
 tree_data['Health_Score'] = tree_data.apply(lambda x: 1 if x['Device Status'] == 'Offline' else status_map.get(x['Risk Level'], 0), axis=1)
-
-# Dummy column so every room is exactly the same size on the grid
 tree_data['Grid_Size'] = 1 
 
 try:
     fig_health = px.treemap(
         tree_data, 
-        path=['Root', 'Location', 'Room Name'], # Using the sanitized columns
+        path=['Root', 'Location', 'Room Name'],
         values='Grid_Size',
         color='Health_Score',
-        color_continuous_scale=['#ff4b4b', '#ffa500', '#00d2b4'], # Red, Orange, Green
+        color_continuous_scale=['#ff4b4b', '#ffa500', '#00d2b4'],
         custom_data=['Device Status', 'Platform', 'Notes']
     )
 
