@@ -155,3 +155,64 @@ def draw_card(col, title, df_sub, cap_label):
     with col:
         with st.container(border=True):
             st.write(f"**{title}**")
+            # Only calculate average when the room is actually occupied
+            in_use_df = df_sub[df_sub['Occupancy'] > 0]
+            
+            avg_p = in_use_df['Occupancy'].mean() if not in_use_df.empty else 0.0
+            avg_cap = df_sub['Capacity'].mean() if not df_sub.empty else 1.0
+            
+            if pd.isna(avg_p): avg_p = 0.0
+            if pd.isna(avg_cap) or avg_cap <= 0: avg_cap = 1.0
+            
+            st.metric("Avg People (When In Use)", f"{avg_p:.1f}", delta=f"{cap_label} Max", delta_color="off")
+            st.progress(max(0.0, min((avg_p / avg_cap), 1.0)))
+
+draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], "4")
+draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], "8")
+draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], "20")
+
+# 8. Wellness Section
+st.write("### 🌿 Environmental Health & Wellness")
+w1, w2, w3 = st.columns(3)
+mask['Humidity'] = pd.to_numeric(mask.get('Humidity', 0), errors='coerce').fillna(0)
+avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean()
+if pd.isna(avg_humidity): avg_humidity = 0
+
+good_aq = len(mask[mask['Air Quality'] == 'Good'])
+total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
+good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
+
+mask['Productivity_Risk'] = (mask['Occupancy'] > 0) & (mask['Air Quality'].isin(['Moderate', 'Poor']))
+risk_hrs = mask[mask['Productivity_Risk']].groupby(g_cols).ngroups
+
+with w1:
+    with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
+with w2:
+    with st.container(border=True): st.metric("🌬️ Air Quality (Good)", f"{good_aq_pct:.1f}%", "Target: >95%", delta_color="off")
+with w3:
+    with st.container(border=True): st.metric("⚠️ Productivity Risk", f"{risk_hrs} Hrs", "- Occupied + Poor Air", delta_color="inverse")
+
+# 9. Environmental & Occupancy Trends Tabs
+st.write("### 📈 Environmental & Occupancy Trends")
+if not mask.empty and 'Timestamp' in mask.columns:
+    tab1, tab2, tab3 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity"])
+    
+    with tab1:
+        if 'Occupancy' in mask.columns:
+            fig_occ = px.line(mask, x="Timestamp", y="Occupancy", color="Room Name", line_shape='spline')
+            fig_occ.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_occ, use_container_width=True)
+            
+    with tab2:
+        if 'Temperature' in mask.columns:
+            fig_temp = px.line(mask, x="Timestamp", y="Temperature", color="Room Name", line_shape='spline')
+            fig_temp.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_temp, use_container_width=True)
+            
+    with tab3:
+        if 'Humidity' in mask.columns:
+            fig_hum = px.line(mask, x="Timestamp", y="Humidity", color="Room Name", line_shape='spline')
+            fig_hum.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_hum, use_container_width=True)
+else:
+    st.info("Insufficient data to display Trends. Please adjust your filters.")
