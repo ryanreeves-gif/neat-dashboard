@@ -64,6 +64,17 @@ st.markdown(f"""
 # 6. Fleet Health Heatmap (CRASH FIX + SIZING FIX)
 st.write("### 🌍 Global Fleet Health Heatmap")
 st.write("Current status of all devices in the selected location. Click a square to investigate.")
+# Custom Legend for the Heatmap
+st.markdown(
+    """
+    <div style="display: flex; gap: 20px; margin-bottom: 15px; font-size: 14px;">
+        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #00d2b4; margin-right: 8px; border-radius: 3px;"></span> <b>Healthy</b> (Optimal)</div>
+        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #8ebf44; margin-right: 8px; border-radius: 3px;"></span> <b>Medium Risk</b> (Moderate Load)</div>
+        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #ffa500; margin-right: 8px; border-radius: 3px;"></span> <b>High Risk</b> (Temp/VOC Warning)</div>
+        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #ff4b4b; margin-right: 8px; border-radius: 3px;"></span> <b>Offline / Unknown</b> (Critical)</div>
+    </div>
+    """, unsafe_allow_html=True
+)
 
 # Sanitize the hierarchy to prevent Plotly crashes (Handle NaNs and force Strings)
 tree_data = snap.copy()
