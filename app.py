@@ -154,4 +154,4 @@ work_mask = mask[mask['Is_Work_Hour'] == True]
 def draw_card(col, title, df_sub, cap_label):
     with col:
         with st.container(border=True):
-            st.write(f"**{title
+            st.write(f"**{title}**")
