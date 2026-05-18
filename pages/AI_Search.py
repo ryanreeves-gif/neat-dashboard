@@ -158,30 +158,49 @@ if query:
         st.markdown("""
         <div class='action-card'>
             <b>AI Recommendation:</b> We have detected empty rooms that are currently overheating, causing energy waste. 
-            Would you like to remotely adjust the climate control to save energy?
+            Would you like to remotely adjust the climate control or power it off entirely to save energy?
         </div>
         """, unsafe_allow_html=True)
         
         # Interactive UI Controls
-        col1, col2 = st.columns([1, 2])
+        col1, col2, col3 = st.columns([1.5, 1.5, 1.5])
+        
         with col1:
-            target_temp = st.slider("Select Target Temperature (°C)", min_value=18.0, max_value=26.0, value=21.0, step=0.5)
+            target_temp = st.slider("Target Temperature (°C)", min_value=18.0, max_value=26.0, value=21.0, step=0.5)
         
         with col2:
-            st.write("<br>", unsafe_allow_html=True) # spacer
-            if st.button(f"❄️ Adjust Rooms to {target_temp}°C", type="primary"):
+            st.write("<br>", unsafe_allow_html=True) # spacer to align with slider
+            if st.button(f"❄️ Adjust to {target_temp}°C", type="primary", use_container_width=True):
                 with st.spinner("Initiating smart building workflow..."):
                     time.sleep(1.5)
                     st.success(f"✅ Success! Command sent to adjust temperature to {target_temp}°C.")
                     
-                    # Technical Readout for Judges
+                    # Technical Readout for Temperature Change
                     st.markdown(f"""
                     <div class='tech-box'>
                         <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
-                        1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"setpoint": {target_temp}}}</code><br>
+                        1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"action": "set_temp", "setpoint": {target_temp}}}</code><br>
                         2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
                         3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
                         4. <b>Action:</b> Niagara translated call to BACnet protocol. HVAC VAV Box updated successfully.
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+        with col3:
+            st.write("<br>", unsafe_allow_html=True) # spacer to align with slider
+            if st.button("🛑 Power OFF HVAC", use_container_width=True):
+                with st.spinner("Sending kill signal to BMS..."):
+                    time.sleep(1.5)
+                    st.success("✅ Success! HVAC powered down in empty rooms.")
+                    
+                    # Technical Readout for Power Off
+                    st.markdown("""
+                    <div class='tech-box'>
+                        <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                        1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{"action": "power", "state": "OFF"}</code><br>
+                        2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
+                        3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
+                        4. <b>Action:</b> Niagara translated call to BACnet protocol. Zone dampers closed and system powered down.
                     </div>
                     """, unsafe_allow_html=True)
 
