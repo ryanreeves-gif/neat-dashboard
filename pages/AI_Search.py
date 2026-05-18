@@ -135,16 +135,22 @@ if query:
         st.dataframe(partners[['Room Name', 'Location', 'Platform']], hide_index=True)
         st.markdown("<div class='action-card'><b>Proactive Suggestion:</b> Update these devices to the latest NFK firmware for enhanced App Hub ecosystem performance.</div>", unsafe_allow_html=True)
 
-    # Scenario 3: HVAC / Wellness Trigger
-    elif "hot" in q or "temp" in q or "hvac" in q or "voc" in q:
+    # Scenario 3: HVAC / Wellness Trigger (UPDATED ENTERPRISE ARCHITECTURE)
+    elif "hot" in q or "temp" in q or "hvac" in q or "voc" in q or "waste" in q:
         st.warning("🌡️ Evaluating environmental thresholds...")
         time.sleep(0.5)
-        st.markdown("<div class='action-card'><b>AI Recommendation:</b> High environmental load detected in select rooms. Suggest triggering outbound webhook to Building Management System (BMS).</div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div class='action-card'>
+            <b>AI Recommendation:</b> High HVAC waste detected in empty rooms. 
+            <br><br>
+            <b>Suggested Workflow:</b> Trigger outbound webhook to <b>ServiceNow</b> to initiate a <b>Tridium Niagara BMS</b> adjustment via BACnet.
+        </div>
+        """, unsafe_allow_html=True)
         
-        if st.button("❄️ Trigger HVAC Adjustment via Webhook", type="primary"):
-            with st.spinner("Communicating with BMS..."):
+        if st.button("❄️ Trigger ServiceNow BMS Workflow (Webhook)", type="primary"):
+            with st.spinner("Firing payload to ServiceNow IntegrationHub..."):
                 time.sleep(1.5)
-                st.success("Webhook fired successfully! HVAC flow increased.")
+                st.success("✅ Webhook fired successfully! Niagara Gateway translated payload to BACnet. HVAC Setpoint adjusted to 21°C.")
 
     # Fallback / Instructions
     else:
@@ -152,3 +158,4 @@ if query:
         st.markdown("- *'Show me offline rooms'*")
         st.markdown("- *'Which rooms are running App Hub Partner software?'*")
         st.markdown("- *'Are there any hot rooms?'*")
+        st.markdown("- *'How do we fix HVAC waste?'*")
