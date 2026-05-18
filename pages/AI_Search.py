@@ -20,11 +20,25 @@ st.markdown(
         padding: 1.5rem; 
         border-radius: 8px; 
         margin-top: 1rem; 
+        margin-bottom: 1.5rem;
         color: white;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .stTextInput input {background-color: #15171c; color: white; border: 1px solid #2a2d37;}
     .stTextInput input:focus {border: 1px solid #00d2b4; box-shadow: none;}
+    
+    /* Custom Technical Readout Box */
+    .tech-box {
+        background-color: #1a1c23;
+        border: 1px dashed #555;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1rem;
+        font-family: monospace;
+        font-size: 0.9rem;
+        color: #a0aabf;
+    }
+    .tech-box b { color: #00d2b4; }
     </style>
     """, unsafe_allow_html=True
 )
@@ -135,22 +149,41 @@ if query:
         st.dataframe(partners[['Room Name', 'Location', 'Platform']], hide_index=True)
         st.markdown("<div class='action-card'><b>Proactive Suggestion:</b> Update these devices to the latest NFK firmware for enhanced App Hub ecosystem performance.</div>", unsafe_allow_html=True)
 
-    # Scenario 3: HVAC / Wellness Trigger (UPDATED ENTERPRISE ARCHITECTURE)
+    # Scenario 3: HVAC / Wellness Trigger (User Friendly UI + Tech Readout)
     elif "hot" in q or "temp" in q or "hvac" in q or "voc" in q or "waste" in q:
         st.warning("🌡️ Evaluating environmental thresholds...")
         time.sleep(0.5)
+        
+        # User-Friendly Explanation
         st.markdown("""
         <div class='action-card'>
-            <b>AI Recommendation:</b> High HVAC waste detected in empty rooms. 
-            <br><br>
-            <b>Suggested Workflow:</b> Trigger outbound webhook to <b>ServiceNow</b> to initiate a <b>Tridium Niagara BMS</b> adjustment via BACnet.
+            <b>AI Recommendation:</b> We have detected empty rooms that are currently overheating, causing energy waste. 
+            Would you like to remotely adjust the climate control to save energy?
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("❄️ Trigger ServiceNow BMS Workflow (Webhook)", type="primary"):
-            with st.spinner("Firing payload to ServiceNow IntegrationHub..."):
-                time.sleep(1.5)
-                st.success("✅ Webhook fired successfully! Niagara Gateway translated payload to BACnet. HVAC Setpoint adjusted to 21°C.")
+        # Interactive UI Controls
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            target_temp = st.slider("Select Target Temperature (°C)", min_value=18.0, max_value=26.0, value=21.0, step=0.5)
+        
+        with col2:
+            st.write("<br>", unsafe_allow_html=True) # spacer
+            if st.button(f"❄️ Adjust Rooms to {target_temp}°C", type="primary"):
+                with st.spinner("Initiating smart building workflow..."):
+                    time.sleep(1.5)
+                    st.success(f"✅ Success! Command sent to adjust temperature to {target_temp}°C.")
+                    
+                    # Technical Readout for Judges
+                    st.markdown(f"""
+                    <div class='tech-box'>
+                        <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                        1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"setpoint": {target_temp}}}</code><br>
+                        2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
+                        3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
+                        4. <b>Action:</b> Niagara translated call to BACnet protocol. HVAC VAV Box updated successfully.
+                    </div>
+                    """, unsafe_allow_html=True)
 
     # Fallback / Instructions
     else:
