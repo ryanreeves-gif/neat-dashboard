@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Config
+# 1. Config & Corporate Theme
 st.set_page_config(page_title="Neat | Admin", layout="wide", page_icon="🛠️")
 st.markdown(
     """
@@ -22,12 +22,21 @@ def load_data():
     data = pd.read_csv(url)
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
+    
     platform_mapping = {'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet', 'apphub': 'Neat App Hub', 'usb': 'BYOD (USB Mode)', 'avos': 'App Hub Partner', 'none': 'Unprovisioned'}
     data['Platform'] = data['Platform'].replace(platform_mapping)
+    
+    # Ensure numeric columns are safe to evaluate
+    data['VOC'] = pd.to_numeric(data.get('VOC', 0), errors='coerce').fillna(0)
+    data['Temperature'] = pd.to_numeric(data.get('Temperature', 0), errors='coerce').fillna(0)
     return data
 
 df = load_data()
 valid_dates = df['Timestamp'].dropna()
+
+if valid_dates.empty:
+    st.error("No valid timestamps found.")
+    st.stop()
 
 # 3. GLOBALLY SYNCED SIDEBAR & BRANDED NAVIGATION
 if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
@@ -61,99 +70,129 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-# --- KEEP THE REST OF YOUR ADMIN CODE (Filter Logic, UI, Heatmap, etc.) BELOW THIS ---
 # 4. Filter Logic
 mask = df.copy()
-if isinstance(date_sel, tuple) and len(date_sel) == 2:
-    mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
-elif isinstance(date_sel, tuple) and len(date_sel) == 1:
-    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
+
+if isinstance(date_sel, tuple):
+    if len(date_sel) == 2:
+        start_date, end_date = date_sel
+    elif len(date_sel) == 1:
+        start_date = end_date = date_sel[0]
+    else:
+        start_date = end_date = valid_dates.max().date()
+else:
+    start_date = end_date = date_sel
+
+mask = mask[(mask['Timestamp'].dt.date >= start_date) & (mask['Timestamp'].dt.date <= end_date)]
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 
-# Get the absolute latest status for every room based on the filtered data
+# Get the absolute latest snapshot of the fleet
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last').copy()
 
-# 5. UI
-st.title("🛠️ IT Administration & Operations")
+# ==========================================
+# 5. HEATMAP LOGIC WITH SMART ISSUE LISTS
+# ==========================================
+st.title("🛠️ IT Operations & Administration")
 
-offline_count = len(snap[snap['Device Status'] == 'Offline'])
-app_hub_count = len(snap[snap['Platform'] == 'App Hub Partner'])
+def generate_issue_list(row):
+    """Diagnoses the room and returns an HTML formatted bullet list of issues."""
+    issues = []
+    
+    if row['Device Status'] == 'Offline':
+        issues.append("🔌 Device Offline")
+    if pd.to_numeric(row.get('VOC', 0), errors='coerce') > 1000:
+        issues.append("⚠️ High VOC (>1000)")
+    if pd.to_numeric(row.get('Temperature', 0), errors='coerce') > 24.0:
+        issues.append("🌡️ High Temp (>24°C)")
+        
+    if not issues:
+        return "✅ Optimal"
+    
+    # Join with HTML line breaks for Plotly
+    return "<br>".join(issues)
 
-st.markdown(f"""
-    <div class="ai-box">
-        <h4 style="margin-top:0;">✨ AI Operations Summary</h4>
-        <ul>
-            <li><b>Fleet Status:</b> {offline_count} devices require immediate attention. Availability is the top priority for this selection.</li>
-            <li><b>Platform Strategy:</b> <b>{app_hub_count}</b> devices are running 'App Hub Partner' software, supporting specialized workflows.</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+# Apply diagnosis to generate the list
+snap['Issue_Details'] = snap.apply(generate_issue_list, axis=1)
+snap['Root'] = 'Global Fleet'
+snap['Size'] = 1  # Equal size boxes
 
-# 6. Fleet Health Heatmap
-st.write("### 🌍 Global Fleet Health Heatmap")
-st.write("Current status of all devices in the selected location. Click a square to investigate.")
-
-# Custom Legend for the Heatmap
-st.markdown(
-    """
-    <div style="display: flex; gap: 20px; margin-bottom: 15px; font-size: 14px;">
-        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #00d2b4; margin-right: 8px; border-radius: 3px;"></span> <b>Healthy</b> (Optimal)</div>
-        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #8ebf44; margin-right: 8px; border-radius: 3px;"></span> <b>Medium Risk</b> (Moderate Load)</div>
-        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #ffa500; margin-right: 8px; border-radius: 3px;"></span> <b>High Risk</b> (Temp/VOC Warning)</div>
-        <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 15px; height: 15px; background-color: #ff4b4b; margin-right: 8px; border-radius: 3px;"></span> <b>Offline / Unknown</b> (Critical)</div>
-    </div>
-    """, unsafe_allow_html=True
-)
-
-# Sanitize the hierarchy to prevent Plotly crashes
-tree_data = snap.copy()
-tree_data['Location'] = tree_data['Location'].fillna('Unassigned Location').astype(str)
-tree_data['Room Name'] = tree_data['Room Name'].fillna('Unknown Room').astype(str)
-tree_data['Root'] = "Global Fleet" 
-
-# Map Risk Levels to Numbers for the Heatmap Colors
-status_map = {'Healthy': 3, 'Medium': 2, 'High': 1, 'Unknown': 0}
-
-# If offline, force High risk. Else use the map.
-tree_data['Health_Score'] = tree_data.apply(lambda x: 1 if x['Device Status'] == 'Offline' else status_map.get(x['Risk Level'], 0), axis=1)
-tree_data['Grid_Size'] = 1 
-
-try:
-    fig_health = px.treemap(
-        tree_data, 
-        path=['Root', 'Location', 'Room Name'],
-        values='Grid_Size',
-        color='Health_Score',
-        color_continuous_scale=['#ff4b4b', '#ffa500', '#00d2b4'],
-        custom_data=['Device Status', 'Platform', 'Notes']
-    )
-
-    fig_health.update_traces(
-        hovertemplate="<b>%{label}</b><br>Status: %{customdata[0]}<br>Platform: %{customdata[1]}<br>Issue: %{customdata[2]}"
-    )
-    fig_health.update_layout(margin=dict(t=25, l=0, r=0, b=0), coloraxis_showscale=False)
-    st.plotly_chart(fig_health, use_container_width=True)
-except Exception as e:
-    st.error("Heatmap rendering paused: Waiting for complete location hierarchy data.")
-
-# 7. Licensing ROI
-st.write("---")
-c1, c2 = st.columns([1, 1])
-
-with c1:
-    st.write("### 💰 Licensing Mix")
-    platform_counts = snap.groupby('Platform').size().reset_index(name='Count')
-    fig_pie = px.pie(platform_counts, values='Count', names='Platform', hole=0.5, color_discrete_sequence=px.colors.qualitative.Pastel)
-    st.plotly_chart(fig_pie, use_container_width=True)
-
-with c2:
-    st.write("### 📋 Quick Issue Log")
-    issues = snap[snap['Device Status'] == 'Offline'][['Room Name', 'Notes', 'Platform']]
-    if not issues.empty:
-        st.dataframe(issues, hide_index=True, use_container_width=True)
+# Assign exact colors based on the diagnosis
+def map_color(row):
+    if 'Offline' in row['Issue_Details']:
+        return 'Critical'
+    elif '⚠️' in row['Issue_Details'] or '🌡️' in row['Issue_Details']:
+        return 'Warning'
     else:
-        st.success("No active critical issues detected.")
+        return 'Healthy'
+        
+snap['Status_Color'] = snap.apply(map_color, axis=1)
 
-st.write("### 📂 Full Fleet Inventory")
-st.dataframe(snap[['Room Name', 'Location', 'Device Status', 'Platform', 'Software Version', 'Notes']], hide_index=True, use_container_width=True)
+color_map = {
+    'Healthy': '#00d2b4',     # Neat Green
+    'Warning': '#ffb000',     # Yellow/Orange
+    'Critical': '#ff4b4b',    # Red
+}
+
+st.write("### 🌍 Global Fleet Health Heatmap")
+st.markdown("Current status of all devices. **Issues are listed directly inside the affected rooms.**")
+
+if not snap.empty:
+    fig = px.treemap(
+        snap,
+        path=['Root', 'Location', 'Room Name'],
+        values='Size',
+        color='Status_Color',
+        color_discrete_map=color_map,
+        custom_data=['Issue_Details']  # Pass the bullet list to Plotly
+    )
+    
+    # Format the text: Room Name in Bold, double line break, then the issue list
+    fig.update_traces(
+        texttemplate="<b>%{label}</b><br><br>%{customdata[0]}",
+        textposition="middle center",
+        textfont=dict(size=14, color="white"),
+        hovertemplate="<b>%{label}</b><br>%{customdata[0]}<extra></extra>"
+    )
+
+    fig.update_layout(
+        margin=dict(t=20, l=10, r=10, b=10),
+        height=650,  # Increased height to fit lists comfortably
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No data available to display heatmap.")
+
+# ==========================================
+# 6. FLEET INVENTORY & PLATFORMS
+# ==========================================
+st.markdown("---")
+st.write("### 🏢 Fleet Configuration & App Hub Platforms")
+
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    if not snap.empty:
+        fig_pie = px.pie(
+            snap, 
+            names='Platform', 
+            hole=0.4,
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        fig_pie.update_layout(
+            margin=dict(t=20, b=20, l=20, r=20),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+with col2:
+    st.dataframe(
+        snap[['Room Name', 'Location', 'Device Status', 'Platform', 'Software Version']].reset_index(drop=True),
+        use_container_width=True,
+        hide_index=True
+    )
