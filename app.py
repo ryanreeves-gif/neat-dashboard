@@ -154,14 +154,23 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# 6. Top Metrics (6 Columns)
+# 6. Top Metrics (6 Columns) - WITH "PER ROOM" FIX
 m1, m2, m3, m4, m5, m6 = st.columns(6)
+
+# Calculate unique rooms in current view to find accurate averages
+unique_rooms = mask['Room Name'].nunique()
+
+# Unproductive & Vampire Light calculations
+unprod_avg = (unproductive_hrs / unique_rooms) if unique_rooms > 0 else 0
+vampire_total = mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups
+vampire_avg = (vampire_total / unique_rooms) if unique_rooms > 0 else 0
+
 m1.metric("🟢 Online", len(snap[snap['Device Status'] == 'Online']))
 m2.metric("👥 Avg/Room", f"{mask[mask['Is_Work_Hour']]['Occupancy'].mean():.1f}" if not mask[mask['Is_Work_Hour']].empty else "0.0")
-m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs")
+m3.metric("📉 Unproductive", f"{unproductive_hrs} Hrs", f"{unprod_avg:.1f} Hrs/rm", delta_color="off")
 m4.metric("☀️ HVAC Waste", f"£{total_waste_cost:,.0f}")
 m5.metric("🌬️ VOC Avg", f"{mask['VOC'].mean():.0f}" if not mask.empty else "0")
-m6.metric("💡 Vampire Light", f"{mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups} Hrs")
+m6.metric("💡 Vampire Light", f"{vampire_total} Hrs", f"{vampire_avg:.1f} Hrs/rm", delta_color="off")
 
 # 7. Efficiency Cards
 st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
@@ -191,7 +200,6 @@ good_aq = len(mask[mask['Air Quality'] == 'Good'])
 total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
 good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
 high_voc_hrs = mask[mask['VOC'] > 1000].groupby(g_cols).ngroups
-vampire_hrs = mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups
 
 with w1:
     with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
@@ -200,7 +208,7 @@ with w2:
 with w3:
     with st.container(border=True): st.metric("⚠️ High VOC Risk", f"{high_voc_hrs} Hrs", "Cognitive Decline Risk", delta_color="inverse")
 with w4:
-    with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_hrs} Hrs", "Empty but Lights ON", delta_color="inverse")
+    with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_total} Hrs", f"{vampire_avg:.1f} Hrs/rm", delta_color="inverse")
 
 # 9. Environmental Trends Tabs (DYNAMIC X-AXIS FIX)
 st.write("### 📈 Full IoT Telemetry Trends")
