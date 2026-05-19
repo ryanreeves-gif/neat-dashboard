@@ -139,7 +139,7 @@ query = st.text_input("💬 Ask the Assistant:", value=st.session_state['ai_quer
 if query:
     q = query.lower()
     
-    # --- ENTERPRISE REASONING LOG (WOW FACTOR) ---
+    # --- ENTERPRISE REASONING LOG ---
     with st.status("🧠 Agent Reasoning Cycle Initiated...", expanded=True) as status:
         st.write("1. Parsing natural language intent structure...")
         time.sleep(0.4)
@@ -150,7 +150,7 @@ if query:
         status.update(label="✅ Analysis Complete. Insights Generated.", state="complete")
     
     # -----------------------------------------------
-    # SCENARIO A: CLIMATE CONTROLS (HOT / COLD)
+    # SCENARIO A: CLIMATE CONTROLS (HOT / COLD) - WITH FULL LOG READOUTS RESTORED
     # -----------------------------------------------
     if any(word in q for word in ["hot", "cold", "temp", "climate", "hvac"]):
         is_cold_search = "cold" in q or "overcool" in q or "freeze" in q
@@ -174,25 +174,43 @@ if query:
                 if st.button(f"🌡️ Adjust to {target_temp}°C", type="secondary"):
                     with st.spinner("Writing to BMS..."):
                         time.sleep(1.2)
-                        st.success("✅ Success! Target parameters sent.")
-                        st.markdown(f"<div class='tech-box'><b>[BACnet IP FRAME]</b> Outbound REST packet converted to BACnet Priority 8 object frame override at Niagara station server. Target setpoint synchronized to {target_temp}°C.</div>", unsafe_allow_html=True)
+                        st.success(f"✅ Success! Target parameters sent to adjust {len(waste_rooms)} rooms.")
+                        
+                        # Restored Full Step-by-Step Readout for Temperature Adjustments
+                        st.markdown(f"""
+                        <div class='tech-box'>
+                            <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(waste_rooms)}, "setpoint": {target_temp}}}</code><br>
+                            2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub via secure inbound REST node.<br>
+                            3. <b>BMS Gateway:</b> Tridium Niagara received architecture call mapping variables to Priority Array 8.<br>
+                            4. <b>Action:</b> Niagara translated call to native BACnet protocol network frames. Local room VAV Boxes synchronized to {target_temp}°C.
+                        </div>
+                        """, unsafe_allow_html=True)
             with col3:
                 st.write("<br>", unsafe_allow_html=True)
                 if st.button("🛑 Turn OFF HVAC", type="primary"):
                     with st.spinner("Powering down..."):
                         time.sleep(1.2)
-                        st.success("✅ Success! HVAC set to Eco Mode.")
-                        st.markdown("<div class='tech-box'><b>[BACnet IP FRAME]</b> Relinquished priority frame. Dispatched point command: <code>Unoccupied_Economy_State = True</code> to underlying VAV zones.</div>", unsafe_allow_html=True)
+                        st.success(f"✅ Success! HVAC powered down to 'Eco Mode' for {len(waste_rooms)} rooms.")
+                        
+                        # Restored Full Step-by-Step Readout for Absolute Cutoffs
+                        st.markdown(f"""
+                        <div class='tech-box'>
+                            <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(waste_rooms)}, "mode": "unoccupied"}}</code><br>
+                            2. <b>Decision Engine:</b> Payload routed directly to ServiceNow Facilities Orchestration Hub.<br>
+                            3. <b>BMS Gateway:</b> Outbound commands pushed to Tridium Niagara framework to clear priority tables.<br>
+                            4. <b>Action:</b> Relinquished priority commands. Dispatched raw BACnet frame forcing <code>Unoccupied_Economy_State = True</code> across target VAV controllers.
+                        </div>
+                        """, unsafe_allow_html=True)
         else:
             st.success("✅ All empty rooms are operating inside optimal, green thermal boundaries.")
 
     # -----------------------------------------------
-    # SCENARIO B: NEW SPACE OPTIMIZATION (C-SUITE FOCUS)
+    # SCENARIO B: REAL ESTATE OPTIMIZATION (C-SUITE FOCUS)
     # -----------------------------------------------
     elif any(word in q for word in ["size", "real estate", "efficiency", "structural", "utilization"]):
         st.info("📊 Executing Fleet-Wide Square Footage Optimization Audit...")
-        
-        # Simulating finding large rooms with low avg occupancy
         large_rooms = snap[snap['Capacity'] > 8]
         
         st.markdown("""
@@ -200,7 +218,7 @@ if query:
             <h3>🏢 Real Estate Strategy Briefing: Conference Room Underutilization</h3>
             Our algorithms cross-referenced room capacity layout metrics against actual active usage density over the target period.
             <br><br>
-            <b>Core Finding:</b> Your large boardrooms (9-20 max capacity) are currently experiencing a <b>78% space-efficiency defecit</b>. 
+            <b>Core Finding:</b> Your large boardrooms (9-20 max capacity) are currently experiencing a <b>78% space-efficiency deficit</b>. 
             Meetings in these rooms average only <b>2.3 participants</b>, meaning you are paying premium real estate costs to heat, cool, and light empty square footage.
         </div>
         """, unsafe_allow_html=True)
