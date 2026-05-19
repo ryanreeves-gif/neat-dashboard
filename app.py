@@ -135,7 +135,7 @@ cost_per_hr = 2.50
 unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
 hvac_wk_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
 total_waste_cost = hvac_wk_hrs * cost_per_hr
-carbon_waste_kg = hvac_wk_hrs * 1.2  # ESG Carbon Calculation (1.2 kg CO2 per HVAC hour)
+carbon_waste_kg = hvac_wk_hrs * 0.75  # ESG Carbon Calculation (1.2 kg CO2 per HVAC hour)
 
 worst_unprod = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax() if not mask[mask['Unproductive_Time']].empty else "None"
 high_voc_mask = mask[mask['VOC'] > 1000]
