@@ -170,23 +170,23 @@ if query:
             st.markdown("""
             <div class='action-card'>
                 <b>AI Recommendation:</b> We have detected empty rooms that are currently overheating, causing energy waste. 
-                Would you like to remotely adjust the climate control for these specific rooms to save energy?
+                You can adjust the climate control for these specific rooms to save energy, or turn the HVAC off completely.
             </div>
             """, unsafe_allow_html=True)
             
-            # 3. Interactive UI Controls
-            col1, col2 = st.columns([1, 2])
+            # 3. Interactive UI Controls (3 Columns for Slider + 2 Buttons)
+            col1, col2, col3 = st.columns([1.5, 1, 1])
             with col1:
                 target_temp = st.slider("Select Target Temperature", min_value=18.0, max_value=26.0, value=21.0, step=0.5, format="%f°C")
             
             with col2:
                 st.write("<br>", unsafe_allow_html=True) # spacer
-                if st.button(f"❄️ Adjust {len(hot_rooms)} Rooms to {target_temp}°C", type="primary"):
+                if st.button(f"❄️ Adjust to {target_temp}°C", type="secondary"):
                     with st.spinner("Initiating smart building workflow..."):
                         time.sleep(1.5)
                         st.success(f"✅ Success! Command sent to adjust {len(hot_rooms)} rooms to {target_temp}°C.")
                         
-                        # Technical Readout for Judges
+                        # Technical Readout for Adjustment
                         st.markdown(f"""
                         <div class='tech-box'>
                             <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
@@ -194,6 +194,24 @@ if query:
                             2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
                             3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
                             4. <b>Action:</b> Niagara translated call to BACnet protocol. HVAC VAV Boxes updated successfully.
+                        </div>
+                        """, unsafe_allow_html=True)
+
+            with col3:
+                st.write("<br>", unsafe_allow_html=True) # spacer
+                if st.button(f"🛑 Turn OFF HVAC", type="primary"):
+                    with st.spinner("Initiating system shutdown workflow..."):
+                        time.sleep(1.5)
+                        st.success(f"✅ Success! HVAC powered down to 'Eco Mode' for {len(hot_rooms)} rooms.")
+                        
+                        # Technical Readout for Shutdown
+                        st.markdown(f"""
+                        <div class='tech-box'>
+                            <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(hot_rooms)}, "mode": "unoccupied"}}</code><br>
+                            2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
+                            3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
+                            4. <b>Action:</b> Niagara translated call to BACnet protocol. HVAC VAV Boxes set to Eco Mode.
                         </div>
                         """, unsafe_allow_html=True)
         else:
