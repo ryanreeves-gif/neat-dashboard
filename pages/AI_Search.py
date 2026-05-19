@@ -149,27 +149,35 @@ if query:
         st.dataframe(partners[['Room Name', 'Location', 'Platform']], hide_index=True)
         st.markdown("<div class='action-card'><b>Proactive Suggestion:</b> Update these devices to the latest NFK firmware for enhanced App Hub ecosystem performance.</div>", unsafe_allow_html=True)
 
-    # Scenario 3: HVAC / Wellness Trigger (User Friendly UI + Tech Readout)
-    elif "hot" in q or "temp" in q or "hvac" in q or "voc" in q or "waste" in q:
+    # Scenario 3: HVAC / Wellness Trigger (Dynamic Hot & Cold Logic)
+    elif any(word in q for word in ["hot", "cold", "temp", "hvac", "waste", "voc"]):
         st.warning("🌡️ Evaluating environmental thresholds...")
         time.sleep(0.5)
         
-        # 1. Dynamically find the hot/empty rooms
-        hot_rooms = snap[(snap['Temperature'] > 22.0) & (snap['Occupancy'] == 0)]
+        # 1. Dynamically determine if user is looking for HOT or COLD rooms
+        is_cold_search = "cold" in q or "overcool" in q or "freeze" in q
         
-        if not hot_rooms.empty:
-            st.error(f"🚨 Identified {len(hot_rooms)} empty room(s) currently overheating and causing HVAC waste:")
+        if is_cold_search:
+            waste_rooms = snap[(snap['Temperature'] < 19.0) & (snap['Occupancy'] == 0)]
+            issue_text = "overcooling"
+        else:
+            waste_rooms = snap[(snap['Temperature'] > 22.0) & (snap['Occupancy'] == 0)]
+            issue_text = "overheating"
+        
+        if not waste_rooms.empty:
+            st.error(f"🚨 Identified {len(waste_rooms)} empty room(s) currently {issue_text} and causing HVAC waste:")
+            
             # Display the data clearly to the user
             st.dataframe(
-                hot_rooms[['Room Name', 'Location', 'Temperature', 'Occupancy']].style.format({'Temperature': '{:.1f}°C'}), 
+                waste_rooms[['Room Name', 'Location', 'Temperature', 'Occupancy']].style.format({'Temperature': '{:.1f}°C'}), 
                 hide_index=True,
                 use_container_width=True
             )
             
             # 2. User-Friendly Explanation & Action Card
-            st.markdown("""
+            st.markdown(f"""
             <div class='action-card'>
-                <b>AI Recommendation:</b> We have detected empty rooms that are currently overheating, causing energy waste. 
+                <b>AI Recommendation:</b> We have detected empty rooms that are currently {issue_text}, causing energy waste. 
                 You can adjust the climate control for these specific rooms to save energy, or turn the HVAC off completely.
             </div>
             """, unsafe_allow_html=True)
@@ -181,16 +189,16 @@ if query:
             
             with col2:
                 st.write("<br>", unsafe_allow_html=True) # spacer
-                if st.button(f"❄️ Adjust to {target_temp}°C", type="secondary"):
+                if st.button(f"🌡️ Adjust to {target_temp}°C", type="secondary"):
                     with st.spinner("Initiating smart building workflow..."):
                         time.sleep(1.5)
-                        st.success(f"✅ Success! Command sent to adjust {len(hot_rooms)} rooms to {target_temp}°C.")
+                        st.success(f"✅ Success! Command sent to adjust {len(waste_rooms)} rooms to {target_temp}°C.")
                         
                         # Technical Readout for Adjustment
                         st.markdown(f"""
                         <div class='tech-box'>
                             <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
-                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(hot_rooms)}, "setpoint": {target_temp}}}</code><br>
+                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(waste_rooms)}, "setpoint": {target_temp}}}</code><br>
                             2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
                             3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
                             4. <b>Action:</b> Niagara translated call to BACnet protocol. HVAC VAV Boxes updated successfully.
@@ -202,25 +210,25 @@ if query:
                 if st.button(f"🛑 Turn OFF HVAC", type="primary"):
                     with st.spinner("Initiating system shutdown workflow..."):
                         time.sleep(1.5)
-                        st.success(f"✅ Success! HVAC powered down to 'Eco Mode' for {len(hot_rooms)} rooms.")
+                        st.success(f"✅ Success! HVAC powered down to 'Eco Mode' for {len(waste_rooms)} rooms.")
                         
                         # Technical Readout for Shutdown
                         st.markdown(f"""
                         <div class='tech-box'>
                             <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
-                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(hot_rooms)}, "mode": "unoccupied"}}</code><br>
+                            1. <b>Event Source:</b> Neat Pulse Webhook triggered with payload <code>{{"target_rooms": {len(waste_rooms)}, "mode": "unoccupied"}}</code><br>
                             2. <b>Decision Engine:</b> Payload ingested by ServiceNow IntegrationHub.<br>
                             3. <b>BMS Gateway:</b> Tridium Niagara received REST API call.<br>
                             4. <b>Action:</b> Niagara translated call to BACnet protocol. HVAC VAV Boxes set to Eco Mode.
                         </div>
                         """, unsafe_allow_html=True)
         else:
-            st.success("✅ All empty rooms are currently within optimal temperature thresholds. No HVAC waste detected.")
+            st.success(f"✅ All empty rooms are currently within optimal temperature thresholds. No {issue_text} waste detected.")
 
     # Fallback / Instructions
     else:
         st.write("I can help you manage your fleet. Try asking:")
         st.markdown("- *'Show me offline rooms'*")
         st.markdown("- *'Which rooms are running App Hub Partner software?'*")
-        st.markdown("- *'Are there any hot rooms?'*")
+        st.markdown("- *'Show me the hot (or cold) rooms'*")
         st.markdown("- *'How do we fix HVAC waste?'*")
