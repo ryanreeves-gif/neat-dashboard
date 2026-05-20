@@ -106,15 +106,19 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-# 4. Filter Logic
+# 4. Filter Logic (Fixed Date Destructuring)
 mask = df.copy()
-if isinstance(date_sel, tuple) and len(date_sel) == 2:
-    mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
-elif isinstance(date_sel, tuple) and len(date_sel) == 1:
-    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
+if isinstance(date_sel, tuple):
+    if len(date_sel) == 2:
+        start_date, end_date = date_sel
+    elif len(date_sel) == 1:
+        start_date = end_date = date_sel[0]
+    else:
+        start_date = end_date = valid_dates.max().date()
 else:
-    mask = mask[mask['Timestamp'].dt.date == date_sel]
+    start_date = end_date = date_sel
 
+mask = mask[(mask['Timestamp'].dt.date >= start_date) & (mask['Timestamp'].dt.date <= end_date)]
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
@@ -180,55 +184,4 @@ with esg3:
 
 # 8. Efficiency Cards
 st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
-c1, c2, c3 = st.columns(3)
-work_mask = mask[mask['Is_Work_Hour'] == True]
-
-def draw_card(col, title, df_sub, bucket_max):
-    with col:
-        with st.container(border=True):
-            st.write(f"**{title}**")
-            in_use_df = df_sub[df_sub['Occupancy'] > 0]
-            avg_p = in_use_df['Occupancy'].mean() if not in_use_df.empty else 0.0
-            st.metric("Avg People (When In Use)", f"{avg_p:.1f}", delta=f"{bucket_max} Max", delta_color="off")
-            st.progress(max(0.0, min((avg_p / bucket_max), 1.0)))
-
-draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], 4)
-draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], 8)
-draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], 20)
-
-# 9. Wellness Section
-st.write("### 🌿 Environmental Health & Operations Risk")
-w1, w2, w3, w4 = st.columns(4)
-
-avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean() if not mask.empty else 0
-good_aq = len(mask[mask['Air Quality'] == 'Good'])
-total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
-good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
-high_voc_hrs = mask[mask['VOC'] > 1000].groupby(g_cols).ngroups
-
-with w1:
-    with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
-with w2:
-    with st.container(border=True): st.metric("🌬️ Air Quality (Good)", f"{good_aq_pct:.1f}%", "Target: >95%", delta_color="off")
-with w3:
-    with st.container(border=True): st.metric("⚠️ High VOC Risk", f"{high_voc_hrs} Hrs", "Cognitive Decline Risk", delta_color="inverse")
-with w4:
-    with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_avg:.1f} Hrs/rm", f"{vampire_total} Total Hrs", delta_color="inverse")
-
-# 10. Environmental Trends Tabs
-st.write("### 📈 Full IoT Telemetry Trends")
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity", "🌬️ VOC", "💡 Light Level"])
-
-def render_chart(tab, y_col):
-    with tab:
-        if not mask.empty and y_col in mask.columns:
-            fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
-            x_format = "%H:%M" if start_date == end_date else "%d %b\n%H:%M"
-            fig.update_layout(xaxis_title="Timeline", xaxis=dict(tickformat=x_format), margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
-
-render_chart(tab1, "Occupancy")
-render_chart(tab2, "Temperature")
-render_chart(tab3, "Humidity")
-render_chart(tab4, "VOC")
-render_chart(tab5, "Light Level")
+c1, c2, c3 =
