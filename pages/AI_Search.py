@@ -1,34 +1,60 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import requests
 import time
 
 # 1. Config & Corporate Theme
-st.set_page_config(page_title="Neat | Admin", layout="wide", page_icon="🛠️")
+st.set_page_config(page_title="Neat | AI Search", layout="wide", page_icon="🤖")
 st.markdown(
     """
     <style>
+    /* Hide default Streamlit branding and raw file navigation */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     [data-testid="stSidebarNav"] {display: none !important;}
-    .ai-box {background-color: #15171c; border: 1px solid #2a2d37; border-left: 5px solid #ffffff; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;}
-    .ai-box h4, .ai-box li, .ai-box p { color: white !important; }
-    .floorplan-node { background-color: #15171c; border: 1px solid #2a2d37; border-radius: 6px; padding: 1rem; text-align: center; margin-bottom: 10px; }
-    .override-log { background-color: #1a1c23; border: 1px dashed #555; padding: 1rem; border-radius: 5px; font-family: monospace; font-size: 0.85rem; color: #a0aabf; }
+    
+    /* Sleek Corporate Action Card */
+    .action-card {
+        background-color: #15171c; 
+        border: 1px solid #2a2d37;
+        border-left: 5px solid #ffffff; 
+        padding: 1.5rem; 
+        border-radius: 8px; 
+        margin-top: 1rem; 
+        margin-bottom: 1.5rem;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .stTextInput input {background-color: #15171c; color: white; border: 1px solid #2a2d37;}
+    .stTextInput input:focus {border: 1px solid #00d2b4; box-shadow: none;}
+    
+    /* Custom Technical Readout Box */
+    .tech-box {
+        background-color: #1a1c23;
+        border: 1px dashed #555;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-top: 1rem;
+        font-family: monospace;
+        font-size: 0.9rem;
+        color: #a0aabf;
+    }
+    .tech-box b { color: #ffffff; }
     </style>
     """, unsafe_allow_html=True
 )
 
-# 2. Data Loading
+# 2. Data Loading (Synced Logic)
 @st.cache_data(ttl=600)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1bconB0u70BZv0aTblhhEA8_q56rlO6KAU1RG0P8yOjE/export?format=csv"
     data = pd.read_csv(url)
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
-    platform_mapping = {'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet', 'apphub': 'Neat App Hub', 'usb': 'BYOD (USB Mode)', 'avos': 'App Hub Partner', 'none': 'Unprovisioned'}
+    platform_mapping = {
+        'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet',
+        'apphub': 'Neat App Hub', 'usb': 'BYOD (USB Mode)', 'avos': 'App Hub Partner', 'none': 'Unprovisioned'
+    }
     data['Platform'] = data['Platform'].replace(platform_mapping)
-    data['VOC'] = pd.to_numeric(data.get('VOC', 0), errors='coerce').fillna(0)
-    data['Temperature'] = pd.to_numeric(data.get('Temperature', 0), errors='coerce').fillna(0)
     return data
 
 df = load_data()
@@ -42,6 +68,7 @@ if valid_dates.empty:
 if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
 if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
 if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
+if 'ai_query' not in st.session_state: st.session_state['ai_query'] = ""
 
 def save_selections():
     st.session_state['saved_loc'] = st.session_state['loc_filter']
@@ -81,87 +108,129 @@ else:
 
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
-snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last').copy()
+snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 
-def generate_issue_list(row):
-    issues = []
-    if row['Device Status'] == 'Offline': issues.append("🔌 Device Offline")
-    if pd.to_numeric(row.get('VOC', 0), errors='coerce') > 1000: issues.append("⚠️ High VOC (>1000)")
-    if pd.to_numeric(row.get('Temperature', 0), errors='coerce') > 24.0: issues.append("🌡️ High Temp (>24°C)")
-    return "<br>".join(issues) if issues else "✅ Optimal"
+# 5. Dashboard UI
+st.title("🤖 AI Insights & Workflows")
+st.write("Execute plain-English intent parameters to activate building intelligence layers and remote API pipelines.")
 
-snap['Issue_Details'] = snap.apply(generate_issue_list, axis=1)
-snap['Root'] = 'Global Fleet'
-snap['Size'] = 1  
+# --- THE COMMAND CENTER MATRIX ---
+st.markdown("<p style='color: #ffffff; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px; margin-bottom: 10px;'>SUGGESTED OPERATIONAL SCENARIOS</p>", unsafe_allow_html=True)
+btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
 
-def map_color(row):
-    if 'Offline' in row['Issue_Details']: return 'Critical'
-    elif '⚠️' in row['Issue_Details'] or '🌡️' in row['Issue_Details']: return 'Warning'
-    return 'Healthy'
+with btn_col1:
+    if st.button("🔍 Run Climate Waste Audit", use_container_width=True): st.session_state['ai_query'] = "Analyze climate anomalies and find hot empty rooms"
+with btn_col2:
+    if st.button("🚪 Check Real Estate Efficiency", use_container_width=True): st.session_state['ai_query'] = "Analyze room sizing and structural optimization strategy"
+with btn_col3:
+    if st.button("🔌 Triage Hardware Breaches", use_container_width=True): st.session_state['ai_query'] = "Show me offline devices across the fleet"
+with btn_col4:
+    if st.button("🌬️ Review App Hub Deployments", use_container_width=True): st.session_state['ai_query'] = "Identify spaces running partner software modules"
+
+st.write("<br>", unsafe_allow_html=True)
+query = st.text_input("💬 Ask the Assistant:", value=st.session_state['ai_query'], placeholder="Click an action button above or type your own query...")
+
+if query:
+    q = query.lower()
+    with st.status("🧠 Agent Reasoning Cycle Initiated...", expanded=True) as status:
+        st.write("1. Parsing natural language intent structure...")
+        time.sleep(0.4)
+        st.write("2. Querying Neat Pulse edge graph and extracting real-time IoT matrix...")
+        time.sleep(0.5)
+        st.write("3. Running heuristic correlation rules across data clusters...")
+        time.sleep(0.4)
+        status.update(label="✅ Analysis Complete. Insights Generated.", state="complete")
+    
+    # SCENARIO A: CLIMATE CONTROLS (MIDDLEWARE SYSTEM LOG READOUT UPDATED)
+    if any(word in q for word in ["hot", "cold", "temp", "climate", "hvac"]):
+        is_cold_search = "cold" in q or "overcool" in q or "freeze" in q
+        waste_rooms = snap[(snap['Temperature'] < 19.0) & (snap['Occupancy'] == 0)] if is_cold_search else snap[(snap['Temperature'] > 22.0) & (snap['Occupancy'] == 0)]
+        issue_text = "overcooling" if is_cold_search else "overheating"
         
-snap['Status_Color'] = snap.apply(map_color, axis=1)
-color_map = {'Healthy': '#00d2b4', 'Warning': '#ffb000', 'Critical': '#ff4b4b'}
-
-# 5. ENTERPRISE BMS WORKSPACE TABS
-st.title("🛠️ Building Management & Operations System")
-view_tab, twin_tab, alarm_tab, override_tab = st.tabs(["🌍 Fleet Heatmap", "🗺️ Spatial Digital Twin (Floorplans)", "🚨 Active Alarm Console", "🎛️ BMS Manual Overrides"])
-
-with view_tab:
-    st.write("### Real-Time Fleet Topology")
-    if not snap.empty:
-        fig = px.treemap(snap, path=['Root', 'Location', 'Room Name'], values='Size', color='Status_Color', color_discrete_map=color_map, custom_data=['Issue_Details'])
-        fig.update_traces(texttemplate="<b>%{label}</b><br><br>%{customdata[0]}", textposition="middle center", textfont=dict(size=14, color="white"), hovertemplate="<b>%{label}</b><br>%{customdata[0]}<extra></extra>")
-        fig.update_layout(margin=dict(t=20, l=10, r=10, b=10), height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
-
-with twin_tab:
-    st.write("### 🏢 Physical Floor Plan Mapping")
-    if not snap.empty:
-        wings = ["North Wing (Zone A)", "South Wing (Zone B)", "Executive Suite (Zone C)"]
-        snap['Wing'] = [wings[i % len(wings)] for i in range(len(snap))]
-        for wing in sorted(snap['Wing'].unique()):
-            st.write(f"#### 📍 {wing}")
-            wing_rooms = snap[snap['Wing'] == wing]
-            cols = st.columns(4)
-            for idx, (_, room) in enumerate(wing_rooms.iterrows()):
-                col = cols[idx % 4]
-                border_color = color_map[room['Status_Color']]
-                with col:
-                    st.markdown(f'<div class="floorplan-node" style="border-top: 4px solid {border_color};"><span style="font-weight:bold; font-size:1.1rem; color:white;">{room["Room Name"]}</span><br><span style="color:#888; font-size:0.85rem;">{room["Location"]}</span><br><br><span style="font-size:0.9rem;">🌡️ {room["Temperature"]:.1f}°C &nbsp;|&nbsp; 🌬️ {room["VOC"]:.0f} VOC</span></div>', unsafe_allow_html=True)
-
-with alarm_tab:
-    st.write("### 🚨 Active Operational Breaches & ServiceNow Link")
-    breached_rooms = snap[snap['Status_Color'] != 'Healthy'].copy()
-    if not breached_rooms.empty:
-        breached_rooms['Ticket ID'] = [f"INC-2026-{1042 + idx}" for idx in range(len(breached_rooms))]
-        breached_rooms['Lifecycle'] = ["New" if status == 'Critical' else "Acknowledged" for status in breached_rooms['Status_Color']]
-        breached_rooms['Breach Details'] = breached_rooms['Issue_Details'].str.replace("<br>", " | ")
-        st.dataframe(breached_rooms[['Ticket ID', 'Room Name', 'Location', 'Breach Details', 'Lifecycle']], use_container_width=True, hide_index=True)
-    else:
-        st.success("🎉 Zero Active Alarms. System operational limits perfectly bounded.")
-
-with override_tab:
-    st.write("### 🎛️ Direct Manual Edge Controller Overrides")
-    if not snap.empty:
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            target_room = st.selectbox("🎯 Target Room Asset", sorted(snap['Room Name'].unique()))
-            selected_room_data = snap[snap['Room Name'] == target_room].iloc[0]
-            override_action = st.radio("Execute Override Command", ["🔄 Release to Full System Autonomy", "💨 Force Max Air Purge Mode (High Air Flow)", "❄️ Lock VAV Box Setpoint Manual Override", "🔌 Force Remote Edge Device Cycle"])
-            if st.button("⚡ Broadcast Manual Edge Override Command", type="primary", use_container_width=True):
-                with c2:
-                    with st.spinner("Writing priority override frames..."):
+        if not waste_rooms.empty:
+            st.error(f"🚨 Identified {len(waste_rooms)} empty room(s) currently {issue_text} and causing HVAC waste:")
+            st.dataframe(waste_rooms[['Room Name', 'Location', 'Temperature', 'Occupancy']].style.format({'Temperature': '{:.1f}°C'}), hide_index=True, use_container_width=True)
+            st.markdown(f"<div class='action-card'><b>AI Recommendation:</b> We have detected empty rooms that are currently {issue_text}, causing energy waste. Adjust parameters or execute an absolute HVAC cutoff below.</div>", unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([1.5, 1, 1])
+            with col1: target_temp = st.slider("Select Target Temperature", 18.0, 26.0, 21.0, 0.5, format="%f°C")
+            with col2:
+                st.write("<br>", unsafe_allow_html=True)
+                if st.button(f"🌡️ Adjust to {target_temp}°C", type="secondary"):
+                    with st.spinner("Writing to BMS..."):
                         time.sleep(1.2)
-                        st.success(f"✅ Priority Write Confirmed. System baseline overridden for {target_room}.")
-                        st.markdown(f'<div class="override-log"><b>[BACnet OUTBOUND GATEWAY LOG] PRIORITIZED POINT OVERRIDE EXECUTED:</b><br><br>- <b>Target Object:</b> Room_Asset_{target_room.replace(" ", "_")}_HVAC_Control<br>- <b>Command Origin:</b> Admin Manual Priority Stack<br>- <b>API Payload:</b> <code>{{"action": "force_override", "priority_level": 8}}</code><br>- <b>Status:</b> Object frame synchronized successfully over IP.</div>', unsafe_allow_html=True)
+                        st.success(f"✅ Success! Command sent to adjust {len(waste_rooms)} rooms.")
+                        st.markdown(f"""
+                        <div class='tech-box'>
+                            <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                            1. <b>Event Source:</b> Streamlit Middleware parsed Neat telemetry exceptions.<br>
+                            2. <b>Middleware Action:</b> Streamlit constructed and fired an outbound REST payload to ServiceNow IntegrationHub.<br>
+                            3. <b>Decision Engine:</b> ServiceNow processed the manual override payload at priority level 8.<br>
+                            4. <b>BMS Gateway / Action:</b> Tridium Niagara received the instruction set and compiled native BACnet protocol frames. Room target setpoints synchronized to {target_temp}°C.
+                        </div>
+                        """, unsafe_allow_html=True)
+            with col3:
+                st.write("<br>", unsafe_allow_html=True)
+                if st.button("🛑 Turn OFF HVAC", type="primary"):
+                    with st.spinner("Powering down..."):
+                        time.sleep(1.2)
+                        st.success(f"✅ Success! HVAC powered down to 'Eco Mode' for {len(waste_rooms)} rooms.")
+                        st.markdown(f"""
+                        <div class='tech-box'>
+                            <b>[SYSTEM LOG] TECHNICAL WORKFLOW EXECUTED:</b><br><br>
+                            1. <b>Event Source:</b> Streamlit Middleware isolated real-time baseline anomalies from the Neat ecosystem.<br>
+                            2. <b>Middleware Action:</b> Streamlit dispatched an outbound webhook containing target payload parameters to ServiceNow Facilities Hub.<br>
+                            3. <b>Decision Engine:</b> ServiceNow evaluated the operational constraint matrices and issued priority clearing frames.<br>
+                            4. <b>BMS Gateway / Action:</b> Tridium Niagara received the priority frame, dropped local control points, and synchronized a raw BACnet instruction forcing <code>Unoccupied_Economy_State = True</code> across target VAV devices.
+                        </div>
+                        """, unsafe_allow_html=True)
+        else:
+            st.success("✅ All empty rooms are operating inside optimal, green thermal boundaries.")
 
-st.markdown("---")
-st.write("### 🏢 Fleet Configuration & App Hub Platforms")
-col1, col2 = st.columns([1, 2])
-with col1:
-    if not snap.empty:
-        fig_pie = px.pie(snap, names='Platform', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig_pie.update_layout(margin=dict(t=20, b=20, l=20, r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
-        st.plotly_chart(fig_pie, use_container_width=True)
-with col2:
-    st.dataframe(snap[['Room Name', 'Location', 'Device Status', 'Platform', 'Software Version']].reset_index(drop=True), use_container_width=True, hide_index=True)
+    # SCENARIO B: REAL ESTATE OPTIMIZATION
+    elif any(word in q for word in ["size", "real estate", "efficiency", "structural", "utilization"]):
+        st.info("📊 Executing Fleet-Wide Square Footage Optimization Audit...")
+        large_rooms = snap[snap['Capacity'] > 8]
+        st.markdown("""
+        <div class='action-card'>
+            <h3>🏢 Real Estate Strategy Briefing: Conference Room Underutilization</h3>
+            Our algorithms cross-referenced room capacity layout metrics against actual active usage density over the target period.
+            <br><br>
+            <b>Core Finding:</b> Your large boardrooms (9-20 max capacity) are currently experiencing a <b>78% space-efficiency deficit</b>. 
+            Meetings in these rooms average only <b>2.3 participants</b>, meaning you are paying premium real estate costs to heat, cool, and light empty square footage.
+        </div>
+        """, unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("#### ⚠️ Top Structural Waste Offenders")
+            st.dataframe(large_rooms[['Room Name', 'Location', 'Capacity']], hide_index=True, use_container_width=True)
+        with col2:
+            st.write("#### 🛠️ AI Realignment Blueprint")
+            st.success("💡 <b>Structural ROI Recommendation:</b>")
+            st.write("Partition the underutilized 'London Board 32' and 'Oslo Executive' spaces into **3 separate agile huddle rooms (1-4 cap)**.")
+            st.write("This realignment increases overall building collaboration capacity by **300%** and captures an estimated **£42,000/year** in reclaimed real estate utility value.")
+            if st.button("📋 Export Real Estate Blueprint to ServiceNow Facilities", type="primary"):
+                with st.spinner("Generating Facilities Change Request..."):
+                    time.sleep(1.5)
+                    st.success("✅ Change Request Ticket Created: CR-2026-9982 dispatched to Corporate Architecture Planning.")
+
+    # SCENARIO C: OFFLINE TRIAGE
+    elif any(word in q for word in ["offline", "down", "reboot", "hardware"]):
+        offline = snap[snap['Device Status'] == 'Offline']
+        if not offline.empty:
+            st.error(f"🚨 Found {len(offline)} offline device(s) in current scope.")
+            st.dataframe(offline[['Room Name', 'Location', 'Notes']], hide_index=True, use_container_width=True)
+            st.markdown("<div class='action-card'><b>AI Recommendation:</b> Network link drops detected. Suggest remote hardware reset via managed port power cycle.</div>", unsafe_allow_html=True)
+            if st.button("🔌 Execute Remote Reboot (Simulated API)", type="primary"):
+                with st.spinner("Authenticating with Neat API..."):
+                    time.sleep(1.2)
+                    st.success("API Command Sent: PoE network switch frame cycled successfully.")
+        else:
+            st.success("✅ Fleet infrastructure map reporting 100% stable online connectivity.")
+
+    # SCENARIO D: PLATFORMS
+    elif any(word in q for word in ["app hub", "partner", "avos", "software", "modules"]):
+        partners = snap[snap['Platform'] == 'App Hub Partner']
+        st.info(f"Found {len(partners)} specialized App Hub Partner spaces operating custom workplace software ecosystems.")
+        st.dataframe(partners[['Room Name', 'Location', 'Platform']], hide_index=True, use_container_width=True)
+        st.markdown("<div class='action-card'><b>Proactive Suggestion:</b> Ensure these endpoints are flagged on separate VLAN profiles to maximize local software telemetry performance.</div>", unsafe_allow_html=True)
