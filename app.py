@@ -17,14 +17,14 @@ st.markdown(
     .ai-box {
         background-color: #15171c; 
         border: 1px solid #2a2d37;
-        border-left: 5px solid #00d2b4; 
+        border-left: 5px solid #ffffff; 
         padding: 1.5rem; 
         border-radius: 8px; 
         margin-bottom: 2rem;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     } 
     .ai-box h4, .ai-box li, .ai-box p { color: white !important; } 
-    [data-testid='stMetricValue'] {color: #00d2b4 !important;}
+    [data-testid='stMetricValue'] {color: #ffffff !important;}
     </style>
     """, 
     unsafe_allow_html=True
@@ -85,17 +85,16 @@ def save_selections():
     st.session_state['saved_rooms'] = st.session_state['room_filter']
 
 with st.sidebar:
-    st.markdown("<h1 style='color: #00d2b4; font-size: 3.5rem; margin-bottom: 0; padding-bottom: 0; line-height: 1;'>neat.</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #ffffff; font-size: 3.5rem; margin-bottom: 0; padding-bottom: 0; line-height: 1;'>neat.</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #888; font-size: 0.9rem; font-weight: 600; letter-spacing: 1px; margin-top: 0; margin-bottom: 30px;'>ENTERPRISE OPERATIONS</p>", unsafe_allow_html=True)
     
-    st.markdown("<p style='color: #00d2b4; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>MENU</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #ffffff; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>MENU</p>", unsafe_allow_html=True)
     st.page_link("app.py", label="Analytics", icon="📊")
     st.page_link("pages/Administration.py", label="Admin", icon="🛠️")
     st.page_link("pages/AI_Search.py", label="AI Search", icon="🤖")
     
     st.markdown("---")
-    
-    st.markdown("<p style='color: #00d2b4; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>GLOBAL FILTERS</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #ffffff; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>GLOBAL FILTERS</p>", unsafe_allow_html=True)
     loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
     loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_opts.index(st.session_state['saved_loc']), key="loc_filter", on_change=save_selections)
     date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
@@ -107,20 +106,15 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-# 4. Filter Logic (Bulletproof Date Handling)
+# 4. Filter Logic
 mask = df.copy()
-
-if isinstance(date_sel, tuple):
-    if len(date_sel) == 2:
-        start_date, end_date = date_sel
-    elif len(date_sel) == 1:
-        start_date = end_date = date_sel[0]
-    else:
-        start_date = end_date = valid_dates.max().date()
+if isinstance(date_sel, tuple) and len(date_sel) == 2:
+    mask = mask[(mask['Timestamp'].dt.date >= date_sel[0]) & (mask['Timestamp'].dt.date <= date_sel[1])]
+elif isinstance(date_sel, tuple) and len(date_sel) == 1:
+    mask = mask[mask['Timestamp'].dt.date == date_sel[0]]
 else:
-    start_date = end_date = date_sel
+    mask = mask[mask['Timestamp'].dt.date == date_sel]
 
-mask = mask[(mask['Timestamp'].dt.date >= start_date) & (mask['Timestamp'].dt.date <= end_date)]
 if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
 if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
 snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
@@ -128,14 +122,13 @@ snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
 # 5. Dashboard UI
 st.title("Room Analytics")
 
-# AI Logic & ESG Math
 mask['Date'] = mask['Timestamp'].dt.date
 g_cols = ['Date', 'Hour', 'Room Name']
 cost_per_hr = 2.50
 unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
 hvac_wk_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
 total_waste_cost = hvac_wk_hrs * cost_per_hr
-carbon_waste_kg = hvac_wk_hrs * 0.75  # ESG Carbon Calculation (1.2 kg CO2 per HVAC hour)
+carbon_waste_kg = hvac_wk_hrs * 1.2
 
 worst_unprod = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax() if not mask[mask['Unproductive_Time']].empty else "None"
 high_voc_mask = mask[mask['VOC'] > 1000]
@@ -152,11 +145,9 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# 6. Top Metrics (6 Columns) - WITH TEMPORAL TRENDS
+# 6. Top Metrics
 m1, m2, m3, m4, m5, m6 = st.columns(6)
-
 unique_rooms = mask['Room Name'].nunique()
-
 in_use_mask = mask[(mask['Is_Work_Hour'] == True) & (mask['Occupancy'] > 0)]
 overall_avg_in_use = in_use_mask['Occupancy'].mean() if not in_use_mask.empty else 0.0
 
@@ -168,13 +159,12 @@ voc_avg = mask['VOC'].mean() if not mask.empty else 0
 
 m1.metric("🟢 Online", len(snap[snap['Device Status'] == 'Online']))
 m2.metric("👥 Avg/Room", f"{overall_avg_in_use:.1f}", "When in use", delta_color="off")
-# Using simulated temporal deltas to demonstrate BMS trending capabilities
 m3.metric(f"📉 Unprod. (Total {unproductive_hrs}h)", f"{unprod_avg:.1f} Hrs/rm", "-12.4% vs prior period", delta_color="inverse")
 m4.metric(f"☀️ HVAC Waste (Total £{total_waste_cost:,.0f})", f"£{hvac_avg:,.0f}/rm", "-8.1% vs prior period", delta_color="inverse")
 m5.metric("🌬️ VOC Avg", f"{voc_avg:.0f}", "Target: < 250", delta_color="off")
 m6.metric(f"💡 Vampire Light", f"{vampire_avg:.1f} Hrs/rm", "-4.5% vs prior period", delta_color="inverse")
 
-# 7. Corporate ESG & Automation (NEW SECTION)
+# 7. Corporate ESG & Automation
 st.write("### 🌍 Corporate ESG & Autonomous Actions")
 esg1, esg2, esg3 = st.columns(3)
 
@@ -199,7 +189,6 @@ def draw_card(col, title, df_sub, bucket_max):
             st.write(f"**{title}**")
             in_use_df = df_sub[df_sub['Occupancy'] > 0]
             avg_p = in_use_df['Occupancy'].mean() if not in_use_df.empty else 0.0
-            
             st.metric("Avg People (When In Use)", f"{avg_p:.1f}", delta=f"{bucket_max} Max", delta_color="off")
             st.progress(max(0.0, min((avg_p / bucket_max), 1.0)))
 
@@ -207,7 +196,7 @@ draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], 4)
 draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], 8)
 draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], 20)
 
-# 9. THE WELLNESS SECTION
+# 9. Wellness Section
 st.write("### 🌿 Environmental Health & Operations Risk")
 w1, w2, w3, w4 = st.columns(4)
 
@@ -234,23 +223,9 @@ def render_chart(tab, y_col):
     with tab:
         if not mask.empty and y_col in mask.columns:
             fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
-            if start_date == end_date:
-                x_format = "%H:%M" 
-                x_title = f"Time of Day ({start_date.strftime('%d %b %Y')})"
-            else:
-                x_format = "%d %b\n%H:%M"
-                x_title = "Date & Time"
-
-            fig.update_layout(
-                xaxis_title=x_title,
-                xaxis=dict(tickformat=x_format),
-                margin=dict(l=0, r=0, t=10, b=0), 
-                paper_bgcolor="rgba(0,0,0,0)", 
-                plot_bgcolor="rgba(0,0,0,0)"
-            )
+            x_format = "%H:%M" if start_date == end_date else "%d %b\n%H:%M"
+            fig.update_layout(xaxis_title="Timeline", xaxis=dict(tickformat=x_format), margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info(f"No telemetry data available for the selected date range.")
 
 render_chart(tab1, "Occupancy")
 render_chart(tab2, "Temperature")
