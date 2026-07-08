@@ -46,7 +46,7 @@ st.markdown(
 # 2. Data Loading (Synced Logic)
 @st.cache_data(ttl=600)
 def load_data():
-    url = "https://docs.google.com/spreadsheets/d/1bconB0u70BZv0aTblhhEA8_q56rlO6KAU1RG0P8yOjE/export?format=csv"
+    url = "https://docs.google.com/spreadsheets/d/1pRnorJjSd2gxPLw4AWYNLXQARkpZwQMT3ukZzEu2L1c/export?format=csv"
     data = pd.read_csv(url)
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
