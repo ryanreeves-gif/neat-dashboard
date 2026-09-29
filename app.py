@@ -75,7 +75,7 @@ def load_data():
     return data
 
 
-# --- 3. Execute Data Load Before Sidebar ---
+# --- 3. Execute Data Load Before Sidebar Rendering ---
 raw_data = load_data()
 data = raw_data.dropna(subset=['Timestamp']).copy()
 
@@ -138,7 +138,7 @@ if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
 
-# --- 6. Main Dashboard & Environmental Summary Cards ---
+# --- 6. Main Dashboard Header & Overview Cards ---
 st.title("🏢 Neat Room Analytics & Middleware Dashboard")
 st.markdown("Real-time telemetry ingestion, space utilization, and IoT environmental insights.")
 
@@ -157,11 +157,10 @@ e4.metric("Avg Air Quality (VOC)", f"{avg_voc:.0f} ppb")
 
 st.markdown("---")
 
-# --- 7. Room Usage & Energy Efficiency Cards ---
+# --- 7. Space Utilization & Energy Efficiency Cards ---
 st.subheader("⚡ Space Utilization & Energy Efficiency Insights")
 u1, u2, u3, u4 = st.columns(4)
 
-# Calculate hours assuming 10-minute polling intervals (1 reading = 1/6th hour)
 ghost_hours = (filtered_df['Unproductive_Time'].sum() / 6) if not filtered_df.empty else 0.0
 hvac_waste_hours = (filtered_df['HVAC_Work_Waste'].sum() / 6) if not filtered_df.empty else 0.0
 vampire_light_hours = (filtered_df['Vampire_Lighting'].sum() / 6) if not filtered_df.empty else 0.0
@@ -214,3 +213,97 @@ if not filtered_df.empty:
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.warning("No data found matching the selected date range and filter criteria.")
+
+st.markdown("---")
+
+
+# --- 9. Room-by-Room Usage & Capacity Breakdown ---
+st.subheader("📊 Room Utilization & Capacity Analysis")
+
+if not filtered_df.empty:
+    col_chart, col_table = st.columns([1, 1])
+
+    # Aggregated room metrics
+    room_stats = (
+        filtered_df.groupby(['Room Name', 'Location'])
+        .agg(
+            Avg_Occupancy=('Occupancy', 'mean'),
+            Peak_Occupancy=('Occupancy', 'max'),
+            Capacity=('Capacity', 'max'),
+            Avg_Temp=('Temperature', 'mean'),
+            Avg_VOC=('VOC', 'mean')
+        )
+        .reset_index()
+    )
+    
+    room_stats['Capacity_Util_%'] = (room_stats['Avg_Occupancy'] / room_stats['Capacity'] * 100).round(1)
+    room_stats['Avg_Occupancy'] = room_stats['Avg_Occupancy'].round(1)
+    room_stats['Avg_Temp'] = room_stats['Avg_Temp'].round(1)
+    room_stats['Avg_VOC'] = room_stats['Avg_VOC'].round(0)
+
+    with col_chart:
+        fig_rooms = px.bar(
+            room_stats.sort_values(by='Avg_Occupancy', ascending=False),
+            x='Room Name',
+            y=['Avg_Occupancy', 'Capacity'],
+            barmode='group',
+            title="Average Occupancy vs Room Capacity",
+            labels={'value': 'Count / People', 'variable': 'Metric'},
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_rooms, use_container_width=True)
+
+    with col_table:
+        st.markdown("**Room Metric Breakdown**")
+        st.dataframe(
+            room_stats[['Room Name', 'Location', 'Capacity', 'Avg_Occupancy', 'Capacity_Util_%', 'Avg_Temp', 'Avg_VOC']],
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+# --- 10. Platform Distribution & Meeting Tech Insights ---
+st.markdown("---")
+st.subheader("💻 Meeting Ecosystem & Platform Usage")
+
+if not filtered_df.empty and 'Platform' in filtered_df.columns:
+    c_plat1, c_plat2 = st.columns([1, 1])
+    
+    platform_counts = filtered_df['Platform'].value_counts().reset_index()
+    platform_counts.columns = ['Platform', 'Count']
+
+    with c_plat1:
+        fig_platform = px.pie(
+            platform_counts,
+            names='Platform',
+            values='Count',
+            title="Platform Share (Active Sessions)",
+            hole=0.4,
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_platform, use_container_width=True)
+
+    with c_plat2:
+        fig_plat_bar = px.bar(
+            platform_counts,
+            x='Platform',
+            y='Count',
+            color='Platform',
+            title="Telecommunication Engine Distribution",
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_plat_bar, use_container_width=True)
+
+
+# --- 11. Raw Telemetry Inspector ---
+st.markdown("---")
+with st.expander("🔍 Inspect Raw Ingested Telemetry Data"):
+    st.dataframe(filtered_df, use_container_width=True)
+    
+    csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Filtered Telemetry CSV",
+        data=csv_data,
+        file_name="neat_telemetry_export.csv",
+        mime="text/csv"
+    )
