@@ -24,10 +24,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
 # --- 2. Data Loading & Caching Engine ---
 @st.cache_data(ttl=600)
 def load_data():
-    # Direct live feed from published personal Google Sheet
+    # Live feed from published personal Google Sheet
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnuQD0k37rAqGskyHXOhri32cd8nsV8yiEFDLF7nuqKBkEdDfgkdrtYtx2Tw1pXyU_N3bADMcVD8iX/pub?output=csv"
     
     try:
@@ -38,7 +39,7 @@ def load_data():
 
     data.columns = data.columns.str.strip()
     
-    # Enforce UK date parsing (dayfirst=True) to fix monthly date drops
+    # Explicitly enforce UK date parsing (DD/MM/YYYY)
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
     platform_mapping = {
@@ -50,12 +51,11 @@ def load_data():
 
     if 'Capacity' in data.columns:
         data['Capacity'] = pd.to_numeric(data['Capacity'], errors='coerce')
-        data['Capacity'] = data.groupby('Room Name')['Capacity'].transform('max')
-        data['Capacity'] = data['Capacity'].fillna(4)
+        data['Capacity'] = data.groupby('Room Name')['Capacity'].transform('max').fillna(4)
     else:
         data['Capacity'] = 4.0
 
-    # Clean numeric columns
+    # Clean numeric telemetry metrics
     for col in ['VOC', 'Light Level', 'Temperature', 'Humidity', 'Occupancy']:
         if col in data.columns:
             data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0)
@@ -69,35 +69,36 @@ def load_data():
     is_daytime = (data['Hour'] >= 8) & (data['Hour'] < 19)
     
     data['Is_Work_Hour'] = is_weekday & is_daytime
-    fig = px.line(
-        smoothed_df,
-        x='Timestamp',
-        y=metric_choice,
-        color='Room Name',
-        title=f"Telemetry Trends — {metric_choice} ({time_filter})",
-        template="plotly_dark",
-        line_shape='spline'  # Pass spline curve directly into Plotly Express
-    )
-
-    # Cleanly set line thickness
-    fig.update_traces(line=dict(width=2))
+    data['Unproductive_Time'] = data['Is_Work_Hour'] & (data['Occupancy'] == 0)
+    hvac_base = (data['Occupancy'] == 0) & (data['Temperature'] > 22.0)
+    data['HVAC_Work_Waste'] = hvac_base & data['Is_Work_Hour']
+    data['Vampire_Lighting'] = (data['Occupancy'] == 0) & (data['Light Level'] > 50)
     
-    fig.update_layout(
-        xaxis_title="Timeline", 
-        yaxis_title=metric_choice, 
-        legend_title="Room Name",
-        hovermode="x unified"
-    )
+    return data
 
-    st.plotly_chart(fig, use_container_width=True)
+
+# --- 3. Execute Data Load Before Rendering UI ---
+raw_data = load_data()
+data = raw_data.dropna(subset=['Timestamp']).copy()
+
+
+# --- 4. Sidebar Filter Controls ---
+st.sidebar.title("neat. Controls")
+
+if st.sidebar.button("🔄 Refresh Telemetry"):
+    st.cache_data.clear()
     st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.header("Filter Options")
 
-# Date Range Picker
-min_date = data['Timestamp'].min().date()
-max_date = data['Timestamp'].max().date()
+# Safe Date Range Bounds
+if not data.empty:
+    min_date = data['Timestamp'].min().date()
+    max_date = data['Timestamp'].max().date()
+else:
+    min_date = pd.Timestamp.today().date()
+    max_date = pd.Timestamp.today().date()
 
 date_range = st.sidebar.date_input(
     "Select Date Range",
@@ -112,18 +113,19 @@ else:
     start_date = min_date
     end_date = max_date
 
-# Location Filter
+# Location Filter Selection
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
 
-# Operating Hours Filter Toggle
+# Operating Hours Filter Selection
 time_filter = st.sidebar.radio(
     "Operating Hours Filter",
     options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 (All Hours)"],
     index=0
 )
 
-# --- 4. Dataset Filtering Logic ---
+
+# --- 5. Data Filtering Logic ---
 start_datetime = pd.to_datetime(start_date)
 end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
@@ -135,22 +137,21 @@ filtered_df = data[
 if selected_locations and 'Location' in filtered_df.columns:
     filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
 
-# Apply Operating Hours Toggle
 if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
     is_work_hours = (filtered_df['Timestamp'].dt.hour >= 8) & (filtered_df['Timestamp'].dt.hour < 19)
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
-# --- 5. Main Dashboard View ---
+
+# --- 6. Main Header & Summary Cards ---
 st.title("🏢 Neat Room Analytics & Middleware Dashboard")
 st.markdown("Real-time telemetry ingestion, space utilization, and IoT environmental insights.")
 
-# Top Metric Summary Cards
 m1, m2, m3, m4 = st.columns(4)
 total_rooms = filtered_df['Room Name'].nunique() if 'Room Name' in filtered_df.columns else 0
-avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty else 0
-avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0
-avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0
+avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty else 0.0
+avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0.0
+avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0.0
 
 m1.metric("Active Rooms", f"{total_rooms}")
 m2.metric("Avg Occupancy", f"{avg_occ:.1f} people")
@@ -159,7 +160,8 @@ m4.metric("Avg Air Quality (VOC)", f"{avg_voc:.0f} ppb")
 
 st.markdown("---")
 
-# --- 6. Smoothed IoT Telemetry Trend Chart ---
+
+# --- 7. Telemetry Trends Chart ---
 st.subheader("📈 Full IoT Telemetry Trends")
 
 metric_choice = st.selectbox(
@@ -168,7 +170,7 @@ metric_choice = st.selectbox(
 )
 
 if not filtered_df.empty:
-    # Resample to 1-hour averages per room to smooth out 10-minute noise
+    # Resample to 1-hour averages per room to reduce 10-minute sensor jitter
     smoothed_df = (
         filtered_df.groupby([
             pd.Grouper(key='Timestamp', freq='1h'), 
@@ -184,11 +186,13 @@ if not filtered_df.empty:
         y=metric_choice,
         color='Room Name',
         title=f"Telemetry Trends — {metric_choice} ({time_filter})",
-        template="plotly_dark"
+        template="plotly_dark",
+        line_shape='spline'  # Enables curved trendlines cleanly inside px.line
     )
 
-    # Convert angular lines into smooth curves
-    fig.update_traces(line_shape='spline', line=dict(width=2))
+    # Apply line width styling separately
+    fig.update_traces(line=dict(width=2))
+    
     fig.update_layout(
         xaxis_title="Timeline", 
         yaxis_title=metric_choice, 
@@ -198,4 +202,4 @@ if not filtered_df.empty:
 
     st.plotly_chart(fig, use_container_width=True)
 else:
-    st.warning("No data found matching the selected filters.")
+    st.warning("No data found matching the selected date range and filter criteria.")
