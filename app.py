@@ -75,12 +75,12 @@ def load_data():
     return data
 
 
-# --- 3. Execute Data Load Before Sidebar Rendering ---
+# --- 3. Execute Data Load ---
 raw_data = load_data()
 data = raw_data.dropna(subset=['Timestamp']).copy()
 
 
-# --- 4. Sidebar Controls ---
+# --- 4. Sidebar Controls (Defaulting to Last 7 Days) ---
 st.sidebar.title("neat. Controls")
 
 if st.sidebar.button("🔄 Refresh Telemetry"):
@@ -93,13 +93,16 @@ st.sidebar.header("Filter Options")
 if not data.empty:
     min_date = data['Timestamp'].min().date()
     max_date = data['Timestamp'].max().date()
+    # Default selection to last 7 days of dataset
+    default_start = max(min_date, max_date - pd.Timedelta(days=7))
 else:
     min_date = pd.Timestamp.today().date()
     max_date = pd.Timestamp.today().date()
+    default_start = min_date
 
 date_range = st.sidebar.date_input(
     "Select Date Range",
-    value=(min_date, max_date),
+    value=(default_start, max_date),
     min_value=min_date,
     max_value=max_date
 )
@@ -107,7 +110,7 @@ date_range = st.sidebar.date_input(
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start_date, end_date = date_range
 else:
-    start_date = min_date
+    start_date = default_start
     end_date = max_date
 
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
@@ -138,7 +141,7 @@ if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
 
-# --- 6. Main Dashboard Header & Overview Cards ---
+# --- 6. Environmental Telemetry Overview Cards ---
 st.title("🏢 Neat Room Analytics & Middleware Dashboard")
 st.markdown("Real-time telemetry ingestion, space utilization, and IoT environmental insights.")
 
@@ -174,7 +177,7 @@ u4.metric("Peak Recorded Occupancy", f"{int(peak_occ)} people", help="Maximum oc
 st.markdown("---")
 
 
-# --- 8. Telemetry Trends Chart ---
+# --- 8. Telemetry Trends Chart (Adaptive Smoothing) ---
 st.subheader("📈 Full IoT Telemetry Trends")
 
 metric_choice = st.selectbox(
@@ -183,9 +186,18 @@ metric_choice = st.selectbox(
 )
 
 if not filtered_df.empty:
+    # Dynamically select resampling interval to keep line charts smooth
+    num_days = (end_date - start_date).days
+    if num_days > 60:
+        freq = '1W'   # Weekly averages for spans > 2 months
+    elif num_days > 14:
+        freq = '1D'   # Daily averages for spans > 2 weeks
+    else:
+        freq = '1h'   # Hourly averages for spans <= 2 weeks
+
     smoothed_df = (
         filtered_df.groupby([
-            pd.Grouper(key='Timestamp', freq='1h'), 
+            pd.Grouper(key='Timestamp', freq=freq), 
             'Room Name'
         ])[metric_choice]
         .mean()
@@ -217,13 +229,12 @@ else:
 st.markdown("---")
 
 
-# --- 9. Room-by-Room Usage & Capacity Breakdown ---
+# --- 9. Room Utilization & Capacity Analysis ---
 st.subheader("📊 Room Utilization & Capacity Analysis")
 
 if not filtered_df.empty:
     col_chart, col_table = st.columns([1, 1])
 
-    # Aggregated room metrics
     room_stats = (
         filtered_df.groupby(['Room Name', 'Location'])
         .agg(
@@ -262,7 +273,7 @@ if not filtered_df.empty:
         )
 
 
-# --- 10. Platform Distribution & Meeting Tech Insights ---
+# --- 10. Meeting Ecosystem & Platform Usage ---
 st.markdown("---")
 st.subheader("💻 Meeting Ecosystem & Platform Usage")
 
