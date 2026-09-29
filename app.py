@@ -215,7 +215,7 @@ if st.sidebar.button("🔄 Sync Live Telemetry", use_container_width=True):
 st.sidebar.markdown("---")
 st.sidebar.markdown("##### Filter Parameters")
 
-if not data.empty:
+if not data.empty and 'Timestamp' in data.columns:
     min_date = data['Timestamp'].min().date()
     max_date = data['Timestamp'].max().date()
     default_start = max(min_date, max_date - pd.Timedelta(days=7))
@@ -237,7 +237,6 @@ else:
     start_date = default_start
     end_date = max_date
 
-# Location Filter
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
 
@@ -248,16 +247,23 @@ time_filter = st.sidebar.radio(
 )
 
 
-# --- 4. Dataset Filtering Logic ---
+# --- 4. Dataset Filtering Logic (Defensive Implementation) ---
 start_datetime = pd.to_datetime(start_date)
 end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
-filtered_df = data[
-    (data['Timestamp'] >= start_datetime) & 
-    (data['Timestamp'] <= end_datetime)
-].copy()
+# Ensure Timestamp is a column and not set as index
+if 'Timestamp' not in data.columns and data.index.name == 'Timestamp':
+    data = data.reset_index()
 
-if selected_locations and 'Location' in filtered_df.columns:
+if 'Timestamp' in data.columns:
+    filtered_df = data[
+        (data['Timestamp'] >= start_datetime) & 
+        (data['Timestamp'] <= end_datetime)
+    ].copy()
+else:
+    filtered_df = data.copy()
+
+if selected_locations and 'Location' in filtered_df.columns and not filtered_df.empty:
     filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
 
 # HARDCODED BACKGROUND FILTER: Enforce target London Showroom rooms only
@@ -272,12 +278,13 @@ TARGET_LONDON_ROOMS = [
     'z Dalmore Google'
 ]
 
-if 'Room Name' in filtered_df.columns:
+if 'Room Name' in filtered_df.columns and not filtered_df.empty:
     filtered_df = filtered_df[filtered_df['Room Name'].apply(
         lambda room: any(target.lower() in str(room).lower() for target in TARGET_LONDON_ROOMS)
     )]
 
-if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
+# Safe Operating Hours Filter Guard
+if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)" and not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
     is_work_hours = (filtered_df['Timestamp'].dt.hour >= 8) & (filtered_df['Timestamp'].dt.hour < 19)
     filtered_df = filtered_df[is_weekday & is_work_hours]
@@ -296,10 +303,10 @@ st.markdown("""
 st.markdown("##### 🌐 Environmental Telemetry Highlights")
 c1, c2, c3, c4 = st.columns(4)
 
-total_rooms = filtered_df['Room Name'].nunique() if not filtered_df.empty else 0
-avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty else 0.0
-avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0.0
-avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0.0
+total_rooms = filtered_df['Room Name'].nunique() if not filtered_df.empty and 'Room Name' in filtered_df.columns else 0
+avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty and 'Occupancy' in filtered_df.columns else 0.0
+avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty and 'Temperature' in filtered_df.columns else 0.0
+avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty and 'VOC' in filtered_df.columns else 0.0
 
 with c1:
     render_neat_card("Active Spaces", f"{total_rooms}", "Live London devices online", "ONLINE", "green")
@@ -316,10 +323,10 @@ st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### ⚡ Space Efficiency & Operational Insights")
 u1, u2, u3, u4 = st.columns(4)
 
-ghost_hours = (filtered_df['Unproductive_Time'].sum() / 6) if not filtered_df.empty else 0.0
-hvac_waste_hours = (filtered_df['HVAC_Work_Waste'].sum() / 6) if not filtered_df.empty else 0.0
-vampire_light_hours = (filtered_df['Vampire_Lighting'].sum() / 6) if not filtered_df.empty else 0.0
-peak_occ = filtered_df['Occupancy'].max() if not filtered_df.empty else 0
+ghost_hours = (filtered_df['Unproductive_Time'].sum() / 6) if not filtered_df.empty and 'Unproductive_Time' in filtered_df.columns else 0.0
+hvac_waste_hours = (filtered_df['HVAC_Work_Waste'].sum() / 6) if not filtered_df.empty and 'HVAC_Work_Waste' in filtered_df.columns else 0.0
+vampire_light_hours = (filtered_df['Vampire_Lighting'].sum() / 6) if not filtered_df.empty and 'Vampire_Lighting' in filtered_df.columns else 0.0
+peak_occ = filtered_df['Occupancy'].max() if not filtered_df.empty and 'Occupancy' in filtered_df.columns else 0
 
 with u1:
     render_neat_card("Ghost Meeting Waste", f"{ghost_hours:.1f} hrs", "Booked rooms left vacant", "ATTENTION", "pink")
@@ -343,7 +350,7 @@ metric_choice = st.selectbox(
 
 neat_colors = ['#799bf1', '#f87171', '#34d399', '#fbbf24', '#c084fc', '#f472b6', '#38bdf8', '#a7f3d0']
 
-if not filtered_df.empty:
+if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     num_days = (end_date - start_date).days
     freq = '1W' if num_days > 60 else ('1D' if num_days > 14 else '1h')
 
@@ -381,13 +388,13 @@ if not filtered_df.empty:
 
     st.plotly_chart(fig, use_container_width=True)
 else:
-    st.warning("No telemetry records matching the selected parameters.")
+    st.warning("No telemetry records matching the selected date range and parameters.")
 
 
 # --- 9. Room Utilization & Capacity Analysis ---
 st.markdown("##### 📊 Room Utilization vs Capacity")
 
-if not filtered_df.empty:
+if not filtered_df.empty and 'Room Name' in filtered_df.columns:
     col_chart, col_table = st.columns([1, 1])
 
     room_stats = (
