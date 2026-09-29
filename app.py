@@ -134,16 +134,6 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid #5e4827;
     }
-
-    /* Chart Container Wrapper */
-    .neat-chart-box {
-        background: #1b1c24;
-        border: 1px solid #282a38;
-        border-radius: 20px;
-        padding: 24px;
-        margin-top: 10px;
-        margin-bottom: 24px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -251,33 +241,6 @@ else:
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
 
-# Specified Target London Showroom Rooms
-TARGET_LONDON_ROOMS = [
-    'Arran', 
-    'Barra', 
-    'Dalmore Microsoft', 
-    'Edradour', 
-    'Harris', 
-    'Longrow', 
-    'Macallan', 
-    'z Dalmore Google'
-]
-
-all_rooms = sorted(data['Room Name'].unique().tolist()) if 'Room Name' in data.columns else []
-
-# Pre-select matching London Showroom rooms dynamically (case-insensitive substring match)
-default_selected_rooms = [
-    room for room in all_rooms 
-    if any(target.lower() in room.lower() for target in TARGET_LONDON_ROOMS)
-]
-
-selected_rooms = st.sidebar.multiselect(
-    "Rooms Filter", 
-    options=all_rooms, 
-    default=default_selected_rooms,
-    help="Pre-configured to London Showroom rooms. Add or remove spaces as needed."
-)
-
 time_filter = st.sidebar.radio(
     "Operating Hours Window",
     options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 Full Telemetry"],
@@ -297,8 +260,22 @@ filtered_df = data[
 if selected_locations and 'Location' in filtered_df.columns:
     filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
 
-if selected_rooms and 'Room Name' in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df['Room Name'].isin(selected_rooms)]
+# HARDCODED BACKGROUND FILTER: Enforce target London Showroom rooms only
+TARGET_LONDON_ROOMS = [
+    'Arran', 
+    'Barra', 
+    'Dalmore Microsoft', 
+    'Edradour', 
+    'Harris', 
+    'Longrow', 
+    'Macallan', 
+    'z Dalmore Google'
+]
+
+if 'Room Name' in filtered_df.columns:
+    filtered_df = filtered_df[filtered_df['Room Name'].apply(
+        lambda room: any(target.lower() in str(room).lower() for target in TARGET_LONDON_ROOMS)
+    )]
 
 if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
