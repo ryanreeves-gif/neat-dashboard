@@ -247,11 +247,10 @@ time_filter = st.sidebar.radio(
 )
 
 
-# --- 4. Dataset Filtering Logic (Defensive Implementation) ---
+# --- 4. Dataset Filtering Logic ---
 start_datetime = pd.to_datetime(start_date)
 end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
-# Ensure Timestamp is a column and not set as index
 if 'Timestamp' not in data.columns and data.index.name == 'Timestamp':
     data = data.reset_index()
 
@@ -266,7 +265,7 @@ else:
 if selected_locations and 'Location' in filtered_df.columns and not filtered_df.empty:
     filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
 
-# HARDCODED BACKGROUND FILTER: Enforce target London Showroom rooms only
+# TARGETED LONDON EC FILTER: Restrict London EC to the 8 showroom rooms only; keep other locations untouched
 TARGET_LONDON_ROOMS = [
     'Arran', 
     'Barra', 
@@ -278,10 +277,15 @@ TARGET_LONDON_ROOMS = [
     'z Dalmore Google'
 ]
 
-if 'Room Name' in filtered_df.columns and not filtered_df.empty:
-    filtered_df = filtered_df[filtered_df['Room Name'].apply(
-        lambda room: any(target.lower() in str(room).lower() for target in TARGET_LONDON_ROOMS)
-    )]
+if not filtered_df.empty and 'Location' in filtered_df.columns and 'Room Name' in filtered_df.columns:
+    def filter_london_ec_only(row):
+        loc = str(row['Location']).strip().lower()
+        room = str(row['Room Name']).strip().lower()
+        if 'london ec' in loc:
+            return any(target.lower() in room for target in TARGET_LONDON_ROOMS)
+        return True
+
+    filtered_df = filtered_df[filtered_df.apply(filter_london_ec_only, axis=1)]
 
 # Safe Operating Hours Filter Guard
 if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)" and not filtered_df.empty and 'Timestamp' in filtered_df.columns:
@@ -309,7 +313,7 @@ avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty and 'Tempe
 avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty and 'VOC' in filtered_df.columns else 0.0
 
 with c1:
-    render_neat_card("Active Spaces", f"{total_rooms}", "Live London devices online", "ONLINE", "green")
+    render_neat_card("Active Spaces", f"{total_rooms}", "Live active devices online", "ONLINE", "green")
 with c2:
     render_neat_card("Avg Occupancy", f"{avg_occ:.1f}", "People per active room", "UTILIZATION", "blue")
 with c3:
