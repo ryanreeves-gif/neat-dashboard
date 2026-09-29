@@ -265,7 +265,7 @@ else:
 if selected_locations and 'Location' in filtered_df.columns and not filtered_df.empty:
     filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
 
-# TARGETED LONDON EC FILTER: Restrict London EC to the 8 showroom rooms only; keep other locations untouched
+# TARGETED LONDON EC FILTER: Restrict London EC to the 8 showroom rooms only
 TARGET_LONDON_ROOMS = [
     'Arran', 
     'Barra', 
@@ -287,7 +287,7 @@ if not filtered_df.empty and 'Location' in filtered_df.columns and 'Room Name' i
 
     filtered_df = filtered_df[filtered_df.apply(filter_london_ec_only, axis=1)]
 
-# Safe Operating Hours Filter Guard
+# Operating Hours Filter Guard
 if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)" and not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
     is_work_hours = (filtered_df['Timestamp'].dt.hour >= 8) & (filtered_df['Timestamp'].dt.hour < 19)
@@ -342,7 +342,7 @@ with u4:
     render_neat_card("Peak Occupancy", f"{int(peak_occ)}", "Maximum concurrent count", "PEAK LOAD", "green")
 
 
-# --- 8. Telemetry Trends Chart (Neat Palette) ---
+# --- 8. Telemetry Trends Chart (Neat Palette & Enforced Calendar Bounds) ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 📈 IoT Telemetry Trends")
 
@@ -379,11 +379,18 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     )
 
     fig.update_traces(line=dict(width=2.5))
+    
+    # ENFORCE CALENDAR PICKER BOUNDS ON PLOTLY X-AXIS
     fig.update_layout(
         paper_bgcolor="#1b1c24",
         plot_bgcolor="#1b1c24",
         font=dict(family="Inter", color="#8e95a7"),
-        xaxis=dict(gridcolor="#282a38", zerolinecolor="#282a38", title="Timeline"),
+        xaxis=dict(
+            gridcolor="#282a38", 
+            zerolinecolor="#282a38", 
+            title="Timeline",
+            range=[start_datetime, end_datetime]  # Explicitly locks X-axis domain to date_input selection
+        ),
         yaxis=dict(gridcolor="#282a38", zerolinecolor="#282a38", title=metric_choice),
         legend=dict(title="Room Name", bgcolor="rgba(0,0,0,0)"),
         hovermode="x unified",
