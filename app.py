@@ -69,21 +69,27 @@ def load_data():
     is_daytime = (data['Hour'] >= 8) & (data['Hour'] < 19)
     
     data['Is_Work_Hour'] = is_weekday & is_daytime
-    data['Unproductive_Time'] = data['Is_Work_Hour'] & (data['Occupancy'] == 0)
-    hvac_base = (data['Occupancy'] == 0) & (data['Temperature'] > 22.0)
-    data['HVAC_Work_Waste'] = hvac_base & data['Is_Work_Hour']
-    data['Vampire_Lighting'] = (data['Occupancy'] == 0) & (data['Light Level'] > 50)
+    fig = px.line(
+        smoothed_df,
+        x='Timestamp',
+        y=metric_choice,
+        color='Room Name',
+        title=f"Telemetry Trends — {metric_choice} ({time_filter})",
+        template="plotly_dark",
+        line_shape='spline'  # Pass spline curve directly into Plotly Express
+    )
+
+    # Cleanly set line thickness
+    fig.update_traces(line=dict(width=2))
     
-    return data
+    fig.update_layout(
+        xaxis_title="Timeline", 
+        yaxis_title=metric_choice, 
+        legend_title="Room Name",
+        hovermode="x unified"
+    )
 
-raw_data = load_data()
-data = raw_data.dropna(subset=['Timestamp']).copy()
-
-# --- 3. Sidebar Filter Controls ---
-st.sidebar.title("neat. Controls")
-
-if st.sidebar.button("🔄 Refresh Telemetry"):
-    st.cache_data.clear()
+    st.plotly_chart(fig, use_container_width=True)
     st.rerun()
 
 st.sidebar.markdown("---")
