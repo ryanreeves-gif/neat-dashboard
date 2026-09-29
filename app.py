@@ -36,7 +36,7 @@ def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnuQD0k37rAqGskyHXOhri32cd8nsV8yiEFDLF7nuqKBkEdDfgkdrtYtx2Tw1pXyU_N3bADMcVD8iX/pub?output=csv"
     data = pd.read_csv(url)
     data.columns = data.columns.str.strip()
-    data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
+    data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
     platform_mapping = {
         'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet',
