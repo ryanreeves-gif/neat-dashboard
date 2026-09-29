@@ -247,8 +247,36 @@ else:
     start_date = default_start
     end_date = max_date
 
+# Location Filter
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
+
+# Specified Target London Showroom Rooms
+TARGET_LONDON_ROOMS = [
+    'Arran', 
+    'Barra', 
+    'Dalmore Microsoft', 
+    'Edradour', 
+    'Harris', 
+    'Longrow', 
+    'Macallan', 
+    'z Dalmore Google'
+]
+
+all_rooms = sorted(data['Room Name'].unique().tolist()) if 'Room Name' in data.columns else []
+
+# Pre-select matching London Showroom rooms dynamically (case-insensitive substring match)
+default_selected_rooms = [
+    room for room in all_rooms 
+    if any(target.lower() in room.lower() for target in TARGET_LONDON_ROOMS)
+]
+
+selected_rooms = st.sidebar.multiselect(
+    "Rooms Filter", 
+    options=all_rooms, 
+    default=default_selected_rooms,
+    help="Pre-configured to London Showroom rooms. Add or remove spaces as needed."
+)
 
 time_filter = st.sidebar.radio(
     "Operating Hours Window",
@@ -268,6 +296,9 @@ filtered_df = data[
 
 if selected_locations and 'Location' in filtered_df.columns:
     filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
+
+if selected_rooms and 'Room Name' in filtered_df.columns:
+    filtered_df = filtered_df[filtered_df['Room Name'].isin(selected_rooms)]
 
 if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
@@ -294,7 +325,7 @@ avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0.0
 avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0.0
 
 with c1:
-    render_neat_card("Active Spaces", f"{total_rooms}", "Live Neat devices online", "ONLINE", "green")
+    render_neat_card("Active Spaces", f"{total_rooms}", "Live London devices online", "ONLINE", "green")
 with c2:
     render_neat_card("Avg Occupancy", f"{avg_occ:.1f}", "People per active room", "UTILIZATION", "blue")
 with c3:
@@ -333,7 +364,6 @@ metric_choice = st.selectbox(
     label_visibility="collapsed"
 )
 
-# Neat Scandinavian Chart Styling Theme
 neat_colors = ['#799bf1', '#f87171', '#34d399', '#fbbf24', '#c084fc', '#f472b6', '#38bdf8', '#a7f3d0']
 
 if not filtered_df.empty:
