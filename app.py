@@ -17,7 +17,7 @@ st.markdown("""
     }
     .stMetric {
         background-color: #1e222d;
-        padding: 12px;
+        padding: 14px;
         border-radius: 8px;
         border: 1px solid #2e3440;
     }
@@ -28,7 +28,6 @@ st.markdown("""
 # --- 2. Data Loading & Caching Engine ---
 @st.cache_data(ttl=600)
 def load_data():
-    # Live feed from published personal Google Sheet
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnuQD0k37rAqGskyHXOhri32cd8nsV8yiEFDLF7nuqKBkEdDfgkdrtYtx2Tw1pXyU_N3bADMcVD8iX/pub?output=csv"
     
     try:
@@ -39,7 +38,7 @@ def load_data():
 
     data.columns = data.columns.str.strip()
     
-    # Explicitly enforce UK date parsing (DD/MM/YYYY)
+    # Enforce UK date parsing
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
     platform_mapping = {
@@ -55,13 +54,13 @@ def load_data():
     else:
         data['Capacity'] = 4.0
 
-    # Clean numeric telemetry metrics
     for col in ['VOC', 'Light Level', 'Temperature', 'Humidity', 'Occupancy']:
         if col in data.columns:
             data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0)
         else:
             data[col] = 0.0
 
+    # Calculated metrics for energy & usage cards
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
@@ -70,19 +69,18 @@ def load_data():
     
     data['Is_Work_Hour'] = is_weekday & is_daytime
     data['Unproductive_Time'] = data['Is_Work_Hour'] & (data['Occupancy'] == 0)
-    hvac_base = (data['Occupancy'] == 0) & (data['Temperature'] > 22.0)
-    data['HVAC_Work_Waste'] = hvac_base & data['Is_Work_Hour']
+    data['HVAC_Work_Waste'] = (data['Occupancy'] == 0) & (data['Temperature'] > 22.0) & data['Is_Work_Hour']
     data['Vampire_Lighting'] = (data['Occupancy'] == 0) & (data['Light Level'] > 50)
     
     return data
 
 
-# --- 3. Execute Data Load Before Rendering UI ---
+# --- 3. Execute Data Load Before Sidebar ---
 raw_data = load_data()
 data = raw_data.dropna(subset=['Timestamp']).copy()
 
 
-# --- 4. Sidebar Filter Controls ---
+# --- 4. Sidebar Controls ---
 st.sidebar.title("neat. Controls")
 
 if st.sidebar.button("🔄 Refresh Telemetry"):
@@ -92,7 +90,6 @@ if st.sidebar.button("🔄 Refresh Telemetry"):
 st.sidebar.markdown("---")
 st.sidebar.header("Filter Options")
 
-# Safe Date Range Bounds
 if not data.empty:
     min_date = data['Timestamp'].min().date()
     max_date = data['Timestamp'].max().date()
@@ -113,11 +110,9 @@ else:
     start_date = min_date
     end_date = max_date
 
-# Location Filter Selection
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
 
-# Operating Hours Filter Selection
 time_filter = st.sidebar.radio(
     "Operating Hours Filter",
     options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 (All Hours)"],
@@ -143,25 +138,44 @@ if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
 
-# --- 6. Main Header & Summary Cards ---
+# --- 6. Main Dashboard & Environmental Summary Cards ---
 st.title("🏢 Neat Room Analytics & Middleware Dashboard")
 st.markdown("Real-time telemetry ingestion, space utilization, and IoT environmental insights.")
 
-m1, m2, m3, m4 = st.columns(4)
-total_rooms = filtered_df['Room Name'].nunique() if 'Room Name' in filtered_df.columns else 0
+st.subheader("🌐 Environmental Telemetry Overview")
+e1, e2, e3, e4 = st.columns(4)
+
+total_rooms = filtered_df['Room Name'].nunique() if not filtered_df.empty else 0
 avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty else 0.0
 avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0.0
 avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0.0
 
-m1.metric("Active Rooms", f"{total_rooms}")
-m2.metric("Avg Occupancy", f"{avg_occ:.1f} people")
-m3.metric("Avg Temperature", f"{avg_temp:.1f} °C")
-m4.metric("Avg Air Quality (VOC)", f"{avg_voc:.0f} ppb")
+e1.metric("Active Rooms Monitored", f"{total_rooms}")
+e2.metric("Avg Room Occupancy", f"{avg_occ:.1f} people")
+e3.metric("Avg Room Temperature", f"{avg_temp:.1f} °C")
+e4.metric("Avg Air Quality (VOC)", f"{avg_voc:.0f} ppb")
+
+st.markdown("---")
+
+# --- 7. Room Usage & Energy Efficiency Cards ---
+st.subheader("⚡ Space Utilization & Energy Efficiency Insights")
+u1, u2, u3, u4 = st.columns(4)
+
+# Calculate hours assuming 10-minute polling intervals (1 reading = 1/6th hour)
+ghost_hours = (filtered_df['Unproductive_Time'].sum() / 6) if not filtered_df.empty else 0.0
+hvac_waste_hours = (filtered_df['HVAC_Work_Waste'].sum() / 6) if not filtered_df.empty else 0.0
+vampire_light_hours = (filtered_df['Vampire_Lighting'].sum() / 6) if not filtered_df.empty else 0.0
+peak_occ = filtered_df['Occupancy'].max() if not filtered_df.empty else 0
+
+u1.metric("Ghost Meeting Waste", f"{ghost_hours:.1f} hrs", help="Work hours where booked/active rooms had 0 occupants")
+u2.metric("HVAC Overheating Waste", f"{hvac_waste_hours:.1f} hrs", help="Empty rooms heated above 22°C during work hours")
+u3.metric("Vampire Lighting", f"{vampire_light_hours:.1f} hrs", help="Lights left on (>50 lux) in empty rooms")
+u4.metric("Peak Recorded Occupancy", f"{int(peak_occ)} people", help="Maximum occupants recorded across all rooms")
 
 st.markdown("---")
 
 
-# --- 7. Telemetry Trends Chart ---
+# --- 8. Telemetry Trends Chart ---
 st.subheader("📈 Full IoT Telemetry Trends")
 
 metric_choice = st.selectbox(
@@ -170,7 +184,6 @@ metric_choice = st.selectbox(
 )
 
 if not filtered_df.empty:
-    # Resample to 1-hour averages per room to reduce 10-minute sensor jitter
     smoothed_df = (
         filtered_df.groupby([
             pd.Grouper(key='Timestamp', freq='1h'), 
@@ -187,12 +200,10 @@ if not filtered_df.empty:
         color='Room Name',
         title=f"Telemetry Trends — {metric_choice} ({time_filter})",
         template="plotly_dark",
-        line_shape='spline'  # Enables curved trendlines cleanly inside px.line
+        line_shape='spline'
     )
 
-    # Apply line width styling separately
     fig.update_traces(line=dict(width=2))
-    
     fig.update_layout(
         xaxis_title="Timeline", 
         yaxis_title=metric_choice, 
