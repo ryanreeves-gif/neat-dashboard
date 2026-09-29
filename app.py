@@ -2,30 +2,169 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# --- 1. Page Configuration & Dark Theme Styling ---
+# --- 1. Page Config & Scandinavian Dark Mode CSS (Neat Pulse Design System) ---
 st.set_page_config(
-    page_title="Neat Room Analytics & Middleware Dashboard",
-    page_icon="🏢",
+    page_title="neat. Pulse Analytics",
+    page_icon="🔮",
     layout="wide"
 )
 
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #0e1117;
-        color: #ffffff;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    .stMetric {
-        background-color: #1e222d;
-        padding: 14px;
-        border-radius: 8px;
-        border: 1px solid #2e3440;
+
+    /* Overall App Background */
+    .stApp {
+        background-color: #121318;
+        color: #f0f2f5;
+    }
+
+    /* Sidebar Customization */
+    [data-testid="stSidebar"] {
+        background-color: #171821;
+        border-right: 1px solid #232533;
+    }
+
+    /* Custom Neat Header */
+    .neat-header-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #232533;
+    }
+    .neat-logo {
+        background: #ffffff;
+        color: #121318;
+        font-weight: 800;
+        font-size: 1.1rem;
+        padding: 6px 14px;
+        border-radius: 12px;
+        letter-spacing: -0.5px;
+    }
+    .neat-title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        color: #ffffff;
+        margin: 0;
+    }
+
+    /* Neat Highlight Card Component */
+    .neat-card {
+        background: #1b1c24;
+        border: 1px solid #282a38;
+        border-radius: 20px;
+        padding: 22px 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+        margin-bottom: 16px;
+        height: 100%;
+    }
+    .neat-card:hover {
+        border-color: #3e4258;
+        transform: translateY(-2px);
+    }
+    .neat-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .neat-card-title {
+        color: #8e95a7;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+    }
+    .neat-card-value {
+        color: #ffffff;
+        font-size: 2.2rem;
+        font-weight: 700;
+        letter-spacing: -0.8px;
+        line-height: 1.1;
+        margin: 6px 0;
+    }
+    .neat-card-sub {
+        color: #799bf1;
+        font-size: 0.82rem;
+        font-weight: 500;
+    }
+
+    /* Status Badges */
+    .neat-badge-pink {
+        background: #3c2027;
+        color: #f87171;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 10px;
+        border: 1px solid #5d2834;
+    }
+    .neat-badge-blue {
+        background: #1c2640;
+        color: #799bf1;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 10px;
+        border: 1px solid #2b3a63;
+    }
+    .neat-badge-green {
+        background: #143528;
+        color: #34d399;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 10px;
+        border: 1px solid #1f5440;
+    }
+    .neat-badge-amber {
+        background: #3b2d19;
+        color: #fbbf24;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 10px;
+        border: 1px solid #5e4827;
+    }
+
+    /* Chart Container Wrapper */
+    .neat-chart-box {
+        background: #1b1c24;
+        border: 1px solid #282a38;
+        border-radius: 20px;
+        padding: 24px;
+        margin-top: 10px;
+        margin-bottom: 24px;
     }
     </style>
 """, unsafe_allow_html=True)
 
 
-# --- 2. Data Loading & Caching Engine ---
+# --- Helper Function to Render Neat Highlight Cards ---
+def render_neat_card(title, value, subtext="", badge_text="", badge_type="blue"):
+    badge_html = f'<span class="neat-badge-{badge_type}">{badge_text}</span>' if badge_text else ''
+    card_html = f"""
+    <div class="neat-card">
+        <div class="neat-card-header">
+            <span class="neat-card-title">{title}</span>
+            {badge_html}
+        </div>
+        <div class="neat-card-value">{value}</div>
+        <div class="neat-card-sub">{subtext}</div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
+# --- 2. Data Ingestion & Caching ---
 @st.cache_data(ttl=600)
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnuQD0k37rAqGskyHXOhri32cd8nsV8yiEFDLF7nuqKBkEdDfgkdrtYtx2Tw1pXyU_N3bADMcVD8iX/pub?output=csv"
@@ -33,12 +172,10 @@ def load_data():
     try:
         data = pd.read_csv(url)
     except Exception as e:
-        st.error("Telemetry stream disconnect. Please check the published spreadsheet URL.")
+        st.error("Telemetry stream disconnect. Check published Google Sheet URL.")
         st.stop()
 
     data.columns = data.columns.str.strip()
-    
-    # Enforce UK date parsing
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
     platform_mapping = {
@@ -60,7 +197,6 @@ def load_data():
         else:
             data[col] = 0.0
 
-    # Calculated metrics for energy & usage cards
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
@@ -75,25 +211,23 @@ def load_data():
     return data
 
 
-# --- 3. Execute Data Load ---
 raw_data = load_data()
 data = raw_data.dropna(subset=['Timestamp']).copy()
 
 
-# --- 4. Sidebar Controls (Defaulting to Last 7 Days) ---
-st.sidebar.title("neat. Controls")
+# --- 3. Sidebar Filtering Controls ---
+st.sidebar.markdown("### **neat.** Controls")
 
-if st.sidebar.button("🔄 Refresh Telemetry"):
+if st.sidebar.button("🔄 Sync Live Telemetry", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.header("Filter Options")
+st.sidebar.markdown("##### Filter Parameters")
 
 if not data.empty:
     min_date = data['Timestamp'].min().date()
     max_date = data['Timestamp'].max().date()
-    # Default selection to last 7 days of dataset
     default_start = max(min_date, max_date - pd.Timedelta(days=7))
 else:
     min_date = pd.Timestamp.today().date()
@@ -101,7 +235,7 @@ else:
     default_start = min_date
 
 date_range = st.sidebar.date_input(
-    "Select Date Range",
+    "Date Range",
     value=(default_start, max_date),
     min_value=min_date,
     max_value=max_date
@@ -117,13 +251,13 @@ locations = data['Location'].unique().tolist() if 'Location' in data.columns els
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
 
 time_filter = st.sidebar.radio(
-    "Operating Hours Filter",
-    options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 (All Hours)"],
+    "Operating Hours Window",
+    options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 Full Telemetry"],
     index=0
 )
 
 
-# --- 5. Data Filtering Logic ---
+# --- 4. Dataset Filtering Logic ---
 start_datetime = pd.to_datetime(start_date)
 end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
@@ -141,27 +275,37 @@ if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
 
-# --- 6. Environmental Telemetry Overview Cards ---
-st.title("🏢 Neat Room Analytics & Middleware Dashboard")
-st.markdown("Real-time telemetry ingestion, space utilization, and IoT environmental insights.")
+# --- 5. Main Dashboard Header ---
+st.markdown("""
+    <div class="neat-header-container">
+        <div class="neat-logo">neat.</div>
+        <div class="neat-title">Pulse Intelligence & IoT Telemetry</div>
+    </div>
+""", unsafe_allow_html=True)
 
-st.subheader("🌐 Environmental Telemetry Overview")
-e1, e2, e3, e4 = st.columns(4)
+
+# --- 6. Environmental Overview Highlight Cards ---
+st.markdown("##### 🌐 Environmental Telemetry Highlights")
+c1, c2, c3, c4 = st.columns(4)
 
 total_rooms = filtered_df['Room Name'].nunique() if not filtered_df.empty else 0
 avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty else 0.0
 avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0.0
 avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0.0
 
-e1.metric("Active Rooms Monitored", f"{total_rooms}")
-e2.metric("Avg Room Occupancy", f"{avg_occ:.1f} people")
-e3.metric("Avg Room Temperature", f"{avg_temp:.1f} °C")
-e4.metric("Avg Air Quality (VOC)", f"{avg_voc:.0f} ppb")
+with c1:
+    render_neat_card("Active Spaces", f"{total_rooms}", "Live Neat devices online", "ONLINE", "green")
+with c2:
+    render_neat_card("Avg Occupancy", f"{avg_occ:.1f}", "People per active room", "UTILIZATION", "blue")
+with c3:
+    render_neat_card("Avg Temperature", f"{avg_temp:.1f} °C", "Target setpoint: 21.0 °C", "CLIMATE", "amber")
+with c4:
+    render_neat_card("Air Quality (VOC)", f"{avg_voc:.0f} ppb", "Indoor environmental index", "AIR QUALITY", "blue")
 
-st.markdown("---")
+st.markdown("<br/>", unsafe_allow_html=True)
 
-# --- 7. Space Utilization & Energy Efficiency Cards ---
-st.subheader("⚡ Space Utilization & Energy Efficiency Insights")
+# --- 7. Space Utilization & Energy Waste Highlight Cards ---
+st.markdown("##### ⚡ Space Efficiency & Operational Insights")
 u1, u2, u3, u4 = st.columns(4)
 
 ghost_hours = (filtered_df['Unproductive_Time'].sum() / 6) if not filtered_df.empty else 0.0
@@ -169,31 +313,32 @@ hvac_waste_hours = (filtered_df['HVAC_Work_Waste'].sum() / 6) if not filtered_df
 vampire_light_hours = (filtered_df['Vampire_Lighting'].sum() / 6) if not filtered_df.empty else 0.0
 peak_occ = filtered_df['Occupancy'].max() if not filtered_df.empty else 0
 
-u1.metric("Ghost Meeting Waste", f"{ghost_hours:.1f} hrs", help="Work hours where booked/active rooms had 0 occupants")
-u2.metric("HVAC Overheating Waste", f"{hvac_waste_hours:.1f} hrs", help="Empty rooms heated above 22°C during work hours")
-u3.metric("Vampire Lighting", f"{vampire_light_hours:.1f} hrs", help="Lights left on (>50 lux) in empty rooms")
-u4.metric("Peak Recorded Occupancy", f"{int(peak_occ)} people", help="Maximum occupants recorded across all rooms")
+with u1:
+    render_neat_card("Ghost Meeting Waste", f"{ghost_hours:.1f} hrs", "Booked rooms left vacant", "ATTENTION", "pink")
+with u2:
+    render_neat_card("HVAC Overheating", f"{hvac_waste_hours:.1f} hrs", "Empty rooms heated >22°C", "ENERGY WASTE", "pink")
+with u3:
+    render_neat_card("Vampire Lighting", f"{vampire_light_hours:.1f} hrs", "Lights active (>50 lx) when empty", "LIGHTING", "amber")
+with u4:
+    render_neat_card("Peak Occupancy", f"{int(peak_occ)}", "Maximum concurrent count", "PEAK LOAD", "green")
 
-st.markdown("---")
 
-
-# --- 8. Telemetry Trends Chart (Adaptive Smoothing) ---
-st.subheader("📈 Full IoT Telemetry Trends")
+# --- 8. Telemetry Trends Chart (Neat Palette) ---
+st.markdown("<br/>", unsafe_allow_html=True)
+st.markdown("##### 📈 IoT Telemetry Trends")
 
 metric_choice = st.selectbox(
     "Select Telemetry Metric",
-    options=["Occupancy", "Temperature", "Humidity", "VOC", "Light Level"]
+    options=["Occupancy", "Temperature", "Humidity", "VOC", "Light Level"],
+    label_visibility="collapsed"
 )
 
+# Neat Scandinavian Chart Styling Theme
+neat_colors = ['#799bf1', '#f87171', '#34d399', '#fbbf24', '#c084fc', '#f472b6', '#38bdf8', '#a7f3d0']
+
 if not filtered_df.empty:
-    # Dynamically select resampling interval to keep line charts smooth
     num_days = (end_date - start_date).days
-    if num_days > 60:
-        freq = '1W'   # Weekly averages for spans > 2 months
-    elif num_days > 14:
-        freq = '1D'   # Daily averages for spans > 2 weeks
-    else:
-        freq = '1h'   # Hourly averages for spans <= 2 weeks
+    freq = '1W' if num_days > 60 else ('1D' if num_days > 14 else '1h')
 
     smoothed_df = (
         filtered_df.groupby([
@@ -209,28 +354,31 @@ if not filtered_df.empty:
         x='Timestamp',
         y=metric_choice,
         color='Room Name',
-        title=f"Telemetry Trends — {metric_choice} ({time_filter})",
+        title=f"Telemetry Stream — {metric_choice} ({time_filter})",
         template="plotly_dark",
-        line_shape='spline'
+        line_shape='spline',
+        color_discrete_sequence=neat_colors
     )
 
-    fig.update_traces(line=dict(width=2))
+    fig.update_traces(line=dict(width=2.5))
     fig.update_layout(
-        xaxis_title="Timeline", 
-        yaxis_title=metric_choice, 
-        legend_title="Room Name",
-        hovermode="x unified"
+        paper_bgcolor="#1b1c24",
+        plot_bgcolor="#1b1c24",
+        font=dict(family="Inter", color="#8e95a7"),
+        xaxis=dict(gridcolor="#282a38", zerolinecolor="#282a38", title="Timeline"),
+        yaxis=dict(gridcolor="#282a38", zerolinecolor="#282a38", title=metric_choice),
+        legend=dict(title="Room Name", bgcolor="rgba(0,0,0,0)"),
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=50, b=20)
     )
 
     st.plotly_chart(fig, use_container_width=True)
 else:
-    st.warning("No data found matching the selected date range and filter criteria.")
-
-st.markdown("---")
+    st.warning("No telemetry records matching the selected parameters.")
 
 
 # --- 9. Room Utilization & Capacity Analysis ---
-st.subheader("📊 Room Utilization & Capacity Analysis")
+st.markdown("##### 📊 Room Utilization vs Capacity")
 
 if not filtered_df.empty:
     col_chart, col_table = st.columns([1, 1])
@@ -258,14 +406,21 @@ if not filtered_df.empty:
             x='Room Name',
             y=['Avg_Occupancy', 'Capacity'],
             barmode='group',
-            title="Average Occupancy vs Room Capacity",
+            title="Avg Occupancy vs Capacity",
             labels={'value': 'Count / People', 'variable': 'Metric'},
-            template="plotly_dark"
+            template="plotly_dark",
+            color_discrete_sequence=['#799bf1', '#34d399']
+        )
+        fig_rooms.update_layout(
+            paper_bgcolor="#1b1c24",
+            plot_bgcolor="#1b1c24",
+            font=dict(family="Inter", color="#8e95a7"),
+            xaxis=dict(gridcolor="#282a38"),
+            yaxis=dict(gridcolor="#282a38")
         )
         st.plotly_chart(fig_rooms, use_container_width=True)
 
     with col_table:
-        st.markdown("**Room Metric Breakdown**")
         st.dataframe(
             room_stats[['Room Name', 'Location', 'Capacity', 'Avg_Occupancy', 'Capacity_Util_%', 'Avg_Temp', 'Avg_VOC']],
             use_container_width=True,
@@ -273,9 +428,9 @@ if not filtered_df.empty:
         )
 
 
-# --- 10. Meeting Ecosystem & Platform Usage ---
-st.markdown("---")
-st.subheader("💻 Meeting Ecosystem & Platform Usage")
+# --- 10. Platform Ecosystem Distribution ---
+st.markdown("<br/>", unsafe_allow_html=True)
+st.markdown("##### 💻 Meeting Ecosystem Share")
 
 if not filtered_df.empty and 'Platform' in filtered_df.columns:
     c_plat1, c_plat2 = st.columns([1, 1])
@@ -288,10 +443,12 @@ if not filtered_df.empty and 'Platform' in filtered_df.columns:
             platform_counts,
             names='Platform',
             values='Count',
-            title="Platform Share (Active Sessions)",
-            hole=0.4,
-            template="plotly_dark"
+            title="Ecosystem Platform Distribution",
+            hole=0.5,
+            template="plotly_dark",
+            color_discrete_sequence=['#799bf1', '#34d399', '#fbbf24', '#f87171']
         )
+        fig_platform.update_layout(paper_bgcolor="#1b1c24", font=dict(family="Inter", color="#8e95a7"))
         st.plotly_chart(fig_platform, use_container_width=True)
 
     with c_plat2:
@@ -300,21 +457,29 @@ if not filtered_df.empty and 'Platform' in filtered_df.columns:
             x='Platform',
             y='Count',
             color='Platform',
-            title="Telecommunication Engine Distribution",
-            template="plotly_dark"
+            title="Active Session Engines",
+            template="plotly_dark",
+            color_discrete_sequence=['#799bf1', '#34d399', '#fbbf24', '#f87171']
+        )
+        fig_plat_bar.update_layout(
+            paper_bgcolor="#1b1c24", 
+            plot_bgcolor="#1b1c24", 
+            font=dict(family="Inter", color="#8e95a7"),
+            xaxis=dict(gridcolor="#282a38"),
+            yaxis=dict(gridcolor="#282a38")
         )
         st.plotly_chart(fig_plat_bar, use_container_width=True)
 
 
 # --- 11. Raw Telemetry Inspector ---
 st.markdown("---")
-with st.expander("🔍 Inspect Raw Ingested Telemetry Data"):
+with st.expander("🔍 Raw Telemetry Data Inspector"):
     st.dataframe(filtered_df, use_container_width=True)
     
     csv_data = filtered_df.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Filtered Telemetry CSV",
         data=csv_data,
-        file_name="neat_telemetry_export.csv",
+        file_name="neat_pulse_telemetry.csv",
         mime="text/csv"
     )
