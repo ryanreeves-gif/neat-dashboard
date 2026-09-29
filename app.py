@@ -2,62 +2,71 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Config & Corporate Theme
-st.set_page_config(page_title="Neat | Analytics", layout="wide", page_icon="🟢")
-st.markdown(
-    """
-    <style>
-    /* Hide default Streamlit branding and raw file navigation */
-    #MainMenu {visibility: hidden;} 
-    footer {visibility: hidden;} 
-    header {visibility: hidden;}
-    [data-testid="stSidebarNav"] {display: none !important;}
-    
-    /* Sleek Corporate AI Box */
-    .ai-box {
-        background-color: #15171c; 
-        border: 1px solid #2a2d37;
-        border-left: 5px solid #ffffff; 
-        padding: 1.5rem; 
-        border-radius: 8px; 
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    } 
-    .ai-box h4, .ai-box li, .ai-box p { color: white !important; } 
-    [data-testid='stMetricValue'] {color: #ffffff !important;}
-    </style>
-    """, 
-    unsafe_allow_html=True
+# --- 1. Page Configuration & Dark Theme Styling ---
+st.set_page_config(
+    page_title="Neat Room Analytics & Middleware Dashboard",
+    page_icon="🏢",
+    layout="wide"
 )
 
-# 2. Data Loading & Logic
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0e1117;
+        color: #ffffff;
+    }
+    .stMetric {
+        background-color: #1e222d;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #2e3440;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 2. Data Loading & Caching Engine ---
 @st.cache_data(ttl=600)
 def load_data():
+    # Direct live feed from published personal Google Sheet
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnuQD0k37rAqGskyHXOhri32cd8nsV8yiEFDLF7nuqKBkEdDfgkdrtYtx2Tw1pXyU_N3bADMcVD8iX/pub?output=csv"
-    data = pd.read_csv(url)
+    
+    try:
+        data = pd.read_csv(url)
+    except Exception as e:
+        st.error("Telemetry stream disconnect. Please check the published spreadsheet URL.")
+        st.stop()
+
     data.columns = data.columns.str.strip()
+    
+    # Enforce UK date parsing (dayfirst=True) to fix monthly date drops
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
     platform_mapping = {
         'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet',
         'apphub': 'Neat App Hub', 'usb': 'BYOD (USB Mode)', 'avos': 'App Hub Partner', 'none': 'Unprovisioned'
     }
-    data['Platform'] = data['Platform'].replace(platform_mapping)
+    if 'Platform' in data.columns:
+        data['Platform'] = data['Platform'].replace(platform_mapping)
 
     if 'Capacity' in data.columns:
         data['Capacity'] = pd.to_numeric(data['Capacity'], errors='coerce')
+        data['Capacity'] = data.groupby('Room Name')['Capacity'].transform('max')
+        data['Capacity'] = data['Capacity'].fillna(4)
     else:
-        data['Capacity'] = float('nan')
-    data['Capacity'] = data.groupby('Room Name')['Capacity'].transform('max')
-    data['Capacity'] = data['Capacity'].fillna(4)
-    
-    data['VOC'] = pd.to_numeric(data.get('VOC', 0), errors='coerce').fillna(0)
-    data['Light Level'] = pd.to_numeric(data.get('Light Level', 0), errors='coerce').fillna(0)
+        data['Capacity'] = 4.0
+
+    # Clean numeric columns
+    for col in ['VOC', 'Light Level', 'Temperature', 'Humidity', 'Occupancy']:
+        if col in data.columns:
+            data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0)
+        else:
+            data[col] = 0.0
+
     data['Hour'] = data['Timestamp'].dt.hour
     data['Day'] = data['Timestamp'].dt.strftime('%A')
     
     is_weekday = data['Day'].isin(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
-    is_daytime = (data['Hour'] >= 9) & (data['Hour'] < 18)
+    is_daytime = (data['Hour'] >= 8) & (data['Hour'] < 19)
     
     data['Is_Work_Hour'] = is_weekday & is_daytime
     data['Unproductive_Time'] = data['Is_Work_Hour'] & (data['Occupancy'] == 0)
@@ -67,172 +76,120 @@ def load_data():
     
     return data
 
-df = load_data()
-valid_dates = df['Timestamp'].dropna()
+raw_data = load_data()
+data = raw_data.dropna(subset=['Timestamp']).copy()
 
-if valid_dates.empty:
-    st.error("No valid timestamps found.")
-    st.stop()
+# --- 3. Sidebar Filter Controls ---
+st.sidebar.title("neat. Controls")
 
-# 3. GLOBALLY SYNCED SIDEBAR & BRANDED NAVIGATION
-if 'saved_loc' not in st.session_state: st.session_state['saved_loc'] = "All"
-if 'saved_dates' not in st.session_state: st.session_state['saved_dates'] = (valid_dates.min().date(), valid_dates.max().date())
-if 'saved_rooms' not in st.session_state: st.session_state['saved_rooms'] = []
+if st.sidebar.button("🔄 Refresh Telemetry"):
+    st.cache_data.clear()
+    st.rerun()
 
-def save_selections():
-    st.session_state['saved_loc'] = st.session_state['loc_filter']
-    st.session_state['saved_dates'] = st.session_state['date_filter']
-    st.session_state['saved_rooms'] = st.session_state['room_filter']
+st.sidebar.markdown("---")
+st.sidebar.header("Filter Options")
 
-with st.sidebar:
-    st.markdown("<h1 style='color: #ffffff; font-size: 3.5rem; margin-bottom: 0; padding-bottom: 0; line-height: 1;'>neat.</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #888; font-size: 0.9rem; font-weight: 600; letter-spacing: 1px; margin-top: 0; margin-bottom: 30px;'>ENTERPRISE OPERATIONS</p>", unsafe_allow_html=True)
-    
-    st.markdown("<p style='color: #ffffff; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>MENU</p>", unsafe_allow_html=True)
-    st.page_link("app.py", label="Analytics", icon="📊")
-    st.page_link("pages/Administration.py", label="Admin", icon="🛠️")
-    st.page_link("pages/AI_Search.py", label="AI Search", icon="🤖")
-    
-    st.markdown("---")
-    st.markdown("<p style='color: #ffffff; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px;'>GLOBAL FILTERS</p>", unsafe_allow_html=True)
-    loc_opts = ["All"] + sorted(df['Location'].dropna().unique().tolist())
-    loc_sel = st.selectbox("📍 Location", loc_opts, index=loc_opts.index(st.session_state['saved_loc']), key="loc_filter", on_change=save_selections)
-    date_sel = st.date_input("📅 Date Range", value=st.session_state['saved_dates'], key="date_filter", on_change=save_selections)
-    room_opts = sorted(df['Room Name'].dropna().unique().tolist())
-    room_sel = st.multiselect("🚪 Rooms", room_opts, default=st.session_state['saved_rooms'], key="room_filter", on_change=save_selections)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Refresh Telemetry", use_container_width=True, type="primary"):
-        st.cache_data.clear()
-        st.rerun()
+# Date Range Picker
+min_date = data['Timestamp'].min().date()
+max_date = data['Timestamp'].max().date()
 
-# 4. Filter Logic
-mask = df.copy()
-if isinstance(date_sel, tuple):
-    if len(date_sel) == 2:
-        start_date, end_date = date_sel
-    elif len(date_sel) == 1:
-        start_date = end_date = date_sel[0]
-    else:
-        start_date = end_date = valid_dates.max().date()
+date_range = st.sidebar.date_input(
+    "Select Date Range",
+    value=(min_date, max_date),
+    min_value=min_date,
+    max_value=max_date
+)
+
+if isinstance(date_range, tuple) and len(date_range) == 2:
+    start_date, end_date = date_range
 else:
-    start_date = end_date = date_sel
+    start_date = min_date
+    end_date = max_date
 
-mask = mask[(mask['Timestamp'].dt.date >= start_date) & (mask['Timestamp'].dt.date <= end_date)]
-if loc_sel != "All": mask = mask[mask['Location'] == loc_sel]
-if room_sel: mask = mask[mask['Room Name'].isin(room_sel)]
-snap = mask.sort_values('Timestamp').drop_duplicates('Room Name', keep='last')
+# Location Filter
+locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
+selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
 
-# 5. Dashboard UI
-st.title("Room Analytics")
+# Operating Hours Filter Toggle
+time_filter = st.sidebar.radio(
+    "Operating Hours Filter",
+    options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 (All Hours)"],
+    index=0
+)
 
-mask['Date'] = mask['Timestamp'].dt.date
-g_cols = ['Date', 'Hour', 'Room Name']
-cost_per_hr = 2.50
-unproductive_hrs = mask[mask['Unproductive_Time']].groupby(g_cols).ngroups
-hvac_wk_hrs = mask[mask['HVAC_Work_Waste']].groupby(g_cols).ngroups
-total_waste_cost = hvac_wk_hrs * cost_per_hr
-carbon_waste_kg = hvac_wk_hrs * 1.2
+# --- 4. Dataset Filtering Logic ---
+start_datetime = pd.to_datetime(start_date)
+end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
-worst_unprod = mask[mask['Unproductive_Time']]['Room Name'].value_counts().idxmax() if not mask[mask['Unproductive_Time']].empty else "None"
-high_voc_mask = mask[mask['VOC'] > 1000]
-worst_voc = high_voc_mask['Room Name'].value_counts().idxmax() if not high_voc_mask.empty else "None"
+filtered_df = data[
+    (data['Timestamp'] >= start_datetime) & 
+    (data['Timestamp'] <= end_datetime)
+].copy()
 
-st.markdown(f"""
-    <div class="ai-box">
-        <h4 style="margin-top:0;">✨ AI Executive Summary</h4>
-        <ul>
-            <li><b>Real Estate:</b> {'Room utilization is optimal for this period.' if worst_unprod == 'None' else f"'{worst_unprod}' is identifying as a primary source of ghost-meeting waste."}</li>
-            <li><b>Sustainability:</b> HVAC waste identified. Potential savings of <b>£{total_waste_cost:,.0f}</b> and <b>{carbon_waste_kg:,.0f} kg of CO₂e</b> discovered.</li>
-            <li><b>Wellness:</b> {'High VOC levels detected in ' + worst_voc if worst_voc != "None" else "Air quality metrics are currently within healthy optimal ranges."}</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+if selected_locations and 'Location' in filtered_df.columns:
+    filtered_df = filtered_df[filtered_df['Location'].isin(selected_locations)]
 
-# 6. Top Metrics
-m1, m2, m3, m4, m5, m6 = st.columns(6)
-unique_rooms = mask['Room Name'].nunique()
-in_use_mask = mask[(mask['Is_Work_Hour'] == True) & (mask['Occupancy'] > 0)]
-overall_avg_in_use = in_use_mask['Occupancy'].mean() if not in_use_mask.empty else 0.0
+# Apply Operating Hours Toggle
+if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)":
+    is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
+    is_work_hours = (filtered_df['Timestamp'].dt.hour >= 8) & (filtered_df['Timestamp'].dt.hour < 19)
+    filtered_df = filtered_df[is_weekday & is_work_hours]
 
-unprod_avg = (unproductive_hrs / unique_rooms) if unique_rooms > 0 else 0
-hvac_avg = (total_waste_cost / unique_rooms) if unique_rooms > 0 else 0
-vampire_total = mask[mask['Vampire_Lighting']].groupby(g_cols).ngroups
-vampire_avg = (vampire_total / unique_rooms) if unique_rooms > 0 else 0
-voc_avg = mask['VOC'].mean() if not mask.empty else 0
+# --- 5. Main Dashboard View ---
+st.title("🏢 Neat Room Analytics & Middleware Dashboard")
+st.markdown("Real-time telemetry ingestion, space utilization, and IoT environmental insights.")
 
-m1.metric("🟢 Online", len(snap[snap['Device Status'] == 'Online']))
-m2.metric("👥 Avg/Room", f"{overall_avg_in_use:.1f}", "When in use", delta_color="off")
-m3.metric(f"📉 Unprod. (Total {unproductive_hrs}h)", f"{unprod_avg:.1f} Hrs/rm", "-12.4% vs prior period", delta_color="inverse")
-m4.metric(f"☀️ HVAC Waste (Total £{total_waste_cost:,.0f})", f"£{hvac_avg:,.0f}/rm", "-8.1% vs prior period", delta_color="inverse")
-m5.metric("🌬️ VOC Avg", f"{voc_avg:.0f}", "Target: < 250", delta_color="off")
-m6.metric(f"💡 Vampire Light", f"{vampire_avg:.1f} Hrs/rm", "-4.5% vs prior period", delta_color="inverse")
+# Top Metric Summary Cards
+m1, m2, m3, m4 = st.columns(4)
+total_rooms = filtered_df['Room Name'].nunique() if 'Room Name' in filtered_df.columns else 0
+avg_occ = filtered_df['Occupancy'].mean() if not filtered_df.empty else 0
+avg_temp = filtered_df['Temperature'].mean() if not filtered_df.empty else 0
+avg_voc = filtered_df['VOC'].mean() if not filtered_df.empty else 0
 
-# 7. Corporate ESG & Automation
-st.write("### 🌍 Corporate ESG & Autonomous Actions")
-esg1, esg2, esg3 = st.columns(3)
+m1.metric("Active Rooms", f"{total_rooms}")
+m2.metric("Avg Occupancy", f"{avg_occ:.1f} people")
+m3.metric("Avg Temperature", f"{avg_temp:.1f} °C")
+m4.metric("Avg Air Quality (VOC)", f"{avg_voc:.0f} ppb")
 
-with esg1:
-    with st.container(border=True):
-        st.metric("☁️ Projected Carbon Footprint", f"{carbon_waste_kg:,.0f} kg CO₂e", "Based on identified HVAC waste", delta_color="inverse")
-with esg2:
-    with st.container(border=True):
-        st.metric("🤖 Autonomous BMS Interventions", "24 Actions Executed", "Rooms adjusted automatically", delta_color="normal")
-with esg3:
-    with st.container(border=True):
-        st.metric("⚡ Energy Prevented by AI", "£142.50", "Saved this period via automation", delta_color="normal")
+st.markdown("---")
 
-# 8. Efficiency Cards
-st.write("### 🏢 Room Efficiency Analysis (Work Hours Only)")
-c1, c2, c3 = st.columns(3)
-work_mask = mask[mask['Is_Work_Hour'] == True]
+# --- 6. Smoothed IoT Telemetry Trend Chart ---
+st.subheader("📈 Full IoT Telemetry Trends")
 
-def draw_card(col, title, df_sub, bucket_max):
-    with col:
-        with st.container(border=True):
-            st.write(f"**{title}**")
-            in_use_df = df_sub[df_sub['Occupancy'] > 0]
-            avg_p = in_use_df['Occupancy'].mean() if not in_use_df.empty else 0.0
-            st.metric("Avg People (When In Use)", f"{avg_p:.1f}", delta=f"{bucket_max} Max", delta_color="off")
-            st.progress(max(0.0, min((avg_p / bucket_max), 1.0)))
+metric_choice = st.selectbox(
+    "Select Telemetry Metric",
+    options=["Occupancy", "Temperature", "Humidity", "VOC", "Light Level"]
+)
 
-draw_card(c1, "Small (1-4)", work_mask[work_mask['Capacity'] <= 4], 4)
-draw_card(c2, "Medium (5-8)", work_mask[(work_mask['Capacity'] > 4) & (work_mask['Capacity'] <= 8)], 8)
-draw_card(c3, "Large (9-20)", work_mask[work_mask['Capacity'] > 8], 20)
+if not filtered_df.empty:
+    # Resample to 1-hour averages per room to smooth out 10-minute noise
+    smoothed_df = (
+        filtered_df.groupby([
+            pd.Grouper(key='Timestamp', freq='1h'), 
+            'Room Name'
+        ])[metric_choice]
+        .mean()
+        .reset_index()
+    )
 
-# 9. Wellness Section
-st.write("### 🌿 Environmental Health & Operations Risk")
-w1, w2, w3, w4 = st.columns(4)
+    fig = px.line(
+        smoothed_df,
+        x='Timestamp',
+        y=metric_choice,
+        color='Room Name',
+        title=f"Telemetry Trends — {metric_choice} ({time_filter})",
+        template="plotly_dark"
+    )
 
-avg_humidity = mask[mask['Humidity'] > 0]['Humidity'].mean() if not mask.empty else 0
-good_aq = len(mask[mask['Air Quality'] == 'Good'])
-total_aq = len(mask[mask['Air Quality'].notna() & (mask['Air Quality'] != 'Unknown')])
-good_aq_pct = (good_aq / total_aq * 100) if total_aq > 0 else 0
-high_voc_hrs = mask[mask['VOC'] > 1000].groupby(g_cols).ngroups
+    # Convert angular lines into smooth curves
+    fig.update_traces(line_shape='spline', line=dict(width=2))
+    fig.update_layout(
+        xaxis_title="Timeline", 
+        yaxis_title=metric_choice, 
+        legend_title="Room Name",
+        hovermode="x unified"
+    )
 
-with w1:
-    with st.container(border=True): st.metric("💧 Avg Humidity", f"{avg_humidity:.1f}%", "Optimal: 30-50%", delta_color="off")
-with w2:
-    with st.container(border=True): st.metric("🌬️ Air Quality (Good)", f"{good_aq_pct:.1f}%", "Target: >95%", delta_color="off")
-with w3:
-    with st.container(border=True): st.metric("⚠️ High VOC Risk", f"{high_voc_hrs} Hrs", "Cognitive Decline Risk", delta_color="inverse")
-with w4:
-    with st.container(border=True): st.metric("💡 Vampire Lighting", f"{vampire_avg:.1f} Hrs/rm", f"{vampire_total} Total Hrs", delta_color="inverse")
-
-# 10. Environmental Trends Tabs
-st.write("### 📈 Full IoT Telemetry Trends")
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Occupancy", "🌡️ Temperature", "💧 Humidity", "🌬️ VOC", "💡 Light Level"])
-
-def render_chart(tab, y_col):
-    with tab:
-        if not mask.empty and y_col in mask.columns:
-            fig = px.line(mask, x="Timestamp", y=y_col, color="Room Name", line_shape='spline')
-            x_format = "%H:%M" if start_date == end_date else "%d %b\n%H:%M"
-            fig.update_layout(xaxis_title="Timeline", xaxis=dict(tickformat=x_format), margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
-
-render_chart(tab1, "Occupancy")
-render_chart(tab2, "Temperature")
-render_chart(tab3, "Humidity")
-render_chart(tab4, "VOC")
-render_chart(tab5, "Light Level")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.warning("No data found matching the selected filters.")
