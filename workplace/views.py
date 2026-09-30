@@ -1,328 +1,8 @@
-from __future__ import annotations
-import json
-import time
-from datetime import datetime, timezone
-from uuid import uuid4
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-import streamlit as st
-from workplace import analytics as a
-from workplace import ui as u
-
-SIGNALS = {"Occupancy": "People", "Temperature": "Â°C", "Humidity": "% RH", "Light Level": "lux", "VOC": "Source units"}
-
-
-def chart(fig, key):
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False, "scrollZoom": False}, key=key)
-
-
-def csv_download(frame, label, name, key):
-    out = frame.copy()
-    for c in out.select_dtypes(include=["object", "string"]).columns:
-        out[c] = out[c].map(lambda v: "'" + v if isinstance(v, str) and v.lstrip().startswith(("=", "+", "-", "@")) else v)
-    st.download_button(label, out.to_csv(index=False).encode("utf-8-sig"), name, "text/csv", key=key)
-
-
-def focus_environment(room_key, kind):
-    st.session_state["selected_room"] = room_key
-    st.session_state["environment_signal"] = "Light Level" if kind == "light" else "Temperature"
-    st.session_state["environment_action"] = "lights" if kind == "light" else "eco"
-    st.session_state["environment_action_room"] = room_key
-
-
-def finding_rows(issues, prefix, limit=None, environment_evidence=False):
-    if issues.empty:
-        st.write("No findings meet the current evidence thresholds.")
-        st.caption("Check observation coverage and the selected period before drawing a conclusion.")
-        return
-    show = issues.head(limit) if limit else issues
-    for i, row in show.reset_index(drop=True).iterrows():
-        c1, c2, c3, c4 = st.columns([1.4, 2.4, 2.4, .8], vertical_alignment="center")
-        with c1:
-            st.write(f"**{row['Room']}**")
-            st.caption(row.Location)
-        with c2:
-            st.write(row.Finding)
-            st.caption(row.Evidence)
-        with c3:
-            st.write(row["Next step"])
-            st.caption(f"Suggested owner: {row.Owner}")
-        with c4:
-            if environment_evidence:
-                st.button("Evidence", key=f"evidence_{prefix}_{i}",
-                          help=f"Show conditions and suggested actions for {row['Room']}",
-                          on_click=focus_environment, args=(row["Room key"], row.Kind))
-            elif st.button("Evidence", key=f"evidence_{prefix}_{i}", help=f"Open observations for {row['Room']}"):
-                u.go_room(row["Room key"])
-        if i < len(show) - 1:
-            st.divider()
-
-
-def report(ctx):
-    s = ctx["summary"]
-    lines = ["NEAT | WORKPLACE BRIEF", f"Scope: {ctx['start']:%d %b %Y} â€“ {ctx['end']:%d %b %Y %H:%M} (recorded source time)",
-             "Locations: " + ", ".join(sorted(ctx["inventory"].Location.unique())),
-             f"Rooms monitored: {s['rooms']}", f"Space utilisation: {u.fmt(s['utilisation'], '%')}",
-             f"Typical attendance when occupied: {u.fmt(s['attendance'], digits=1)} people",
-             f"Occupancy coverage: {u.fmt(s['coverage'], '%')}", "", "WHERE TO FOCUS"]
-    for _, r in ctx["issues"].drop_duplicates("Room key").head(3).iterrows():
-        lines += [f"{r['Room key']}: {r.Finding}", f"Evidence: {r.Evidence}", f"Next step: {r['Next step']}", ""]
-    lines += ["METHOD", "Utilisation = occupied observed room-hours / valid observed room-hours.",
-              "Attendance = observed person-hours / occupied room-hours. Unknown and offline occupancy is excluded.",
-              "Observations are time-weighted and capped at room sampling cadence. Gaps are not treated as empty.",
-              "Office hours = weekdays 08:00â€“19:00 in the source clock." if ctx["office"] else "All hours selected.",
-              f"Investigation settings: >{ctx['thresholds']['warm']:g} Â°C or >{ctx['thresholds']['bright']:g} lux while empty; at least {ctx['thresholds']['minimum']:g} hours.",
-              "Findings require investigation. Bookings, building controls and energy meters are not connected."]
-    if st.session_state.get("demo_mode"):
-        lines.insert(1, "DEMONSTRATION â€” GENERATED SAMPLE DATA")
-    return "\n".join(lines)
-
-
-def overview():
-    u.shell("Overview", "Your workplace. Understood.", "See how your spaces work. Know where to focus next.")
-    ctx = u.context()
-    s, previous = ctx["summary"], ctx["previous"]
-    delta = None
-    if s["coverage"] >= 70 and previous["coverage"] >= 70 and pd.notna(previous["utilisation"]):
-        delta = f"{s['utilisation'] - previous['utilisation']:+.0f} percentage points vs previous period"
-    cols = st.columns(4, gap="medium")
-    with cols[0]: u.metric("Rooms monitored", str(s["rooms"]), "In your selected scope", "rooms", "rooms")
-    with cols[1]: u.metric("Space utilisation", u.fmt(s["utilisation"], "%"), "Of valid observed room-hours", "utilisation", "util", delta)
-    with cols[2]: u.metric("Typical attendance", u.fmt(s["attendance"], digits=1), "People, while rooms are occupied", "attendance", "attendance")
-    with cols[3]: u.metric("Rooms to review", str(ctx["issues"]["Room key"].nunique()), "With evidence worth investigating", "reviews", "reviews")
-    st.write("")
-    left, right = st.columns([1.55, 1], gap="medium")
-    with left, st.container(key="panel_heatmap"):
-        u.section("When are rooms busiest?", "heatmap")
-        days, bands, z, observed = a.heatmap(ctx["samples"], ctx["office"])
-        labels = np.array([["â€”" if np.isnan(v) else f"{v:.0f}%" for v in row] for row in z])
-        fig = go.Figure(go.Heatmap(x=days, y=bands, z=z, customdata=observed, text=labels,
-            texttemplate="%{text}", textfont={"size": 14}, colorscale=[[0, "#F0F3F8"], [.5, "#B9C9EC"], [1, u.BLUE]],
-            zmin=0, zmax=100, showscale=False, xgap=7, ygap=7, hoverongaps=False,
-            hovertemplate="%{x} Â· %{y}<br>%{z:.1f}% occupied<br>%{customdata:.1f} observed room-hours<extra></extra>"))
-        u.plot_style(fig, 238)
-        fig.update_yaxes(autorange="reversed", showgrid=False)
-        chart(fig, "demand_heatmap")
-        st.caption("Light â†’ dark: 0â€“100% occupied Â· gaps: no valid observations")
-    with right, st.container(key="panel_fit"):
-        u.section("Does the room fit?", "fit")
-        fit = ctx["issues"].query("Kind == 'fit'")
-        candidates = ctx["stats"].query("Capacity > 0 and `Occupied hours` > 0")
-        if candidates.empty:
-            st.write("More occupied observations and room capacity metadata are needed.")
-        else:
-            r = candidates[candidates["Room key"] == fit.iloc[0]["Room key"]].iloc[0] if not fit.empty else candidates.sort_values("Occupied hours", ascending=False).iloc[0]
-            st.write(f"**{r['Room Name']}**")
-            st.caption(r.Location)
-            st.html(f'<div class="roomfit"><div><div class="roomfit-number">{u.fmt(r["Typical attendance"], digits=1)}</div><div class="roomfit-caption">typical people</div></div><div><div class="roomfit-number">{u.fmt(r.Capacity)}</div><div class="roomfit-caption">available seats</div></div></div>')
-            st.write(f"90% of observed occupied time: **{u.fmt(r['P90 attendance'])} people or fewer**.")
-            st.caption("Review the room mix against peak demand." if not fit.empty else "An example from the most-used rooms in this scope.")
-            if st.button("Explore this room", key="fit_room", type="primary"):
-                u.go_room(r["Room key"])
-    st.write("")
-    with st.container(key="panel_focus"):
-        u.section("Where to focus", "focus")
-        st.caption("Three rooms to start with Â· ranked by observed evidence hours")
-        finding_rows(ctx["issues"].drop_duplicates("Room key"), "overview", 3)
-        c1, c2 = st.columns([1, 1])
-        with c1: st.page_link("pages/Insights.py", label="View all findings", icon=":material/arrow_forward:")
-        with c2: st.download_button("Download workplace brief", report(ctx), "neat-workplace-brief.txt", "text/plain")
-    u.footer()
-
-
-def room_trend(ctx, room_key, signal, key):
-    raw = ctx["data"]
-    r = raw[(raw["Room key"] == room_key) & raw.Timestamp.between(ctx["start"], ctx["end"])].copy()
-    if signal == "Occupancy":
-        seg = ctx["samples"][ctx["samples"]["Room key"] == room_key]
-        x, y = [], []
-        for _, row in seg.iterrows():
-            value = row.Occupancy if row["Valid hours"] > 0 else None
-            x.extend([row.Start, row.End, None]); y.extend([value, value, None])
-        fig = go.Figure(go.Scatter(x=x, y=y, mode="lines", line={"color": u.BLUE, "width": 2}, name="Observed people", connectgaps=False))
-        st.caption("Time-weighted observation intervals Â· gaps are unknown")
-    else:
-        if ctx["office"]:
-            r = r[(r.Timestamp.dt.dayofweek < 5) & r.Timestamp.dt.hour.between(8, 18)]
-        r.loc[~r["Device Status"].isin(["Online", "Unreported"]), signal] = np.nan
-        series = r.set_index("Timestamp")[signal].resample("h").mean()
-        if not series.notna().any():
-            st.info("No valid readings for this signal in the selected scope.")
-            return
-        fig = go.Figure(go.Scatter(x=series.index, y=series, mode="lines+markers", marker={"size": 3}, line={"color": u.BLUE, "width": 2}, connectgaps=False, name=signal))
-        st.caption("Hourly reading averages Â· gaps are unknown")
-    fig.update_yaxes(title=SIGNALS[signal], rangemode="tozero" if signal == "Occupancy" else "normal")
-    chart(u.plot_style(fig, 310), key)
-
-
-def choose_room(ctx, label="Room"):
-    opts = sorted(ctx["inventory"]["Room key"])
-    if st.session_state.get("selected_room") not in opts:
-        st.session_state["selected_room"] = opts[0]
-    return st.selectbox(label, opts, **u.field_state("selected_room", opts[0]))
-
-
-def environment_actions(ctx, room):
-    """Local demonstration only: this function never calls ServiceNow or a BMS."""
-    actions = {
-        "eco": {
-            "label": "HVAC eco mode",
-            "kind": "warm",
-            "checks": "Confirm current vacancy, upcoming bookings and the actual HVAC operating mode.",
-            "command": "Request the room's configured HVAC standby / eco mode",
-            "follow_up": "Check HVAC mode feedback and room conditions; restore the normal schedule when occupancy returns or the override expires.",
-        },
-        "temperature": {
-            "label": "Adjust temperature target",
-            "kind": "warm",
-            "checks": "Confirm current temperature, occupancy, the existing setpoint and permitted comfort limits.",
-            "command": "Request a temporary room temperature target",
-            "follow_up": "Check the accepted setpoint and subsequent temperature trend; an accepted command alone does not prove improved comfort.",
-        },
-        "lights": {
-            "label": "Switch room lights off",
-            "kind": "light",
-            "checks": "Confirm current vacancy and bookings, actual lighting state and daylight contribution; exclude emergency lighting.",
-            "command": "Request ordinary room lighting off with occupancy override enabled",
-            "follow_up": "Check lighting circuit feedback; restore normal occupancy control when someone enters or the override expires.",
-        },
-        "purge": {
-            "label": "Air purge / ventilation boost",
-            "kind": None,
-            "checks": "Validate the air-quality sensor, units and threshold; confirm the ventilation system supports a suitable boost sequence.",
-            "command": "Request the building's configured timed ventilation boost",
-            "follow_up": "Check ventilation feedback and subsequent validated air-quality readings; restore the normal schedule when the boost expires.",
-        },
-    }
-    found = ctx["issues"][(ctx["issues"]["Room key"] == room) & ctx["issues"].Kind.isin(["warm", "light"])]
-    if st.session_state.get("environment_action_room") != room:
-        kind = found.iloc[0].Kind if not found.empty else None
-        st.session_state["environment_action"] = "lights" if kind == "light" else "eco"
-        st.session_state["environment_action_room"] = room
-    if st.session_state.get("environment_action") not in actions:
-        st.session_state["environment_action"] = "eco"
-
-    with st.container(key="panel_environment_actions", border=True):
-        st.subheader("Suggested action")
-        st.caption(f"Selected room: {room}")
-        st.info("Control demonstration Â· ServiceNow and building controls are not connected. No commands are sent.")
-        selected = st.selectbox("Action to demonstrate", list(actions),
-                                format_func=lambda k: actions[k]["label"], key="environment_action")
-        action = actions[selected]
-        matching = found[found.Kind.eq(action["kind"])] if action["kind"] else found.iloc[:0]
-        if matching.empty:
-            st.write("**Manual scenario** Â· This action is not triggered by a qualifying finding for this room.")
-        else:
-            for _, f in matching.iterrows():
-                st.write(f"**{f.Finding}** â€” {f.Evidence}")
-            st.caption("A candidate for facilities review. Historical sensor evidence does not confirm current building equipment activity.")
-        if selected == "purge":
-            st.caption("Air purge is a manual demonstration until the air-quality field, units and rule have been validated.")
-
-        left, right = st.columns(2)
-        with left:
-            minutes = st.slider("Temporary override (minutes)", 5, 60, 15, 5, key="environment_duration")
-        target = None
-        with right:
-            if selected == "temperature":
-                target = st.number_input("Example temperature target (Â°C)", 18.0, 26.0, 21.0, .5,
-                                         key="environment_target")
-            else:
-                st.caption("At expiry, the proposed workflow releases the override back to the building's normal control schedule.")
-        command = action["command"]
-        if target is not None:
-            command += f" of {target:g} Â°C"
-        command += f" for {minutes} minutes."
-        st.write(f"**Proposed action:** {command}")
-        with st.expander("What the live workflow would check"):
-            st.write(action["checks"])
-            st.write("Resolve this room to the correct BMS zone and control points; apply site permissions, interlocks and override limits.")
-            st.write(f"**Follow-up:** {action['follow_up']}")
-
-        latest = ctx["inventory"].set_index("Room key").loc[room]
-        snapshot = {"recorded_at": latest.Timestamp.isoformat(), "device_status": str(latest["Device Status"])}
-        for column in ["Occupancy", "Temperature", "Humidity", "Light Level", "VOC"]:
-            value = latest.get(column)
-            snapshot[column] = float(value) if pd.notna(value) else None
-        st.caption(f"Latest record in the selected period: {latest.Timestamp:%d %b %Y %H:%M} Â· recorded source time. This is not live BMS feedback.")
-        config = {
-            "room": room,
-            "action": selected,
-            "action_label": action["label"],
-            "duration_minutes": minutes,
-            "temperature_target_c": target,
-            "proposed_command": command,
-            "period_start": ctx["start"].isoformat(),
-            "period_end": ctx["end"].isoformat(),
-            "clock": "recorded_source_time",
-            "office_hours_only": bool(ctx["office"]),
-            "source_fetched_at": str(ctx["fetched"]),
-            "source_is_sample_data": bool(st.session_state.get("demo_mode", False)),
-            "investigation_thresholds": ctx["thresholds"],
-            "basis": "observed_finding" if not matching.empty else "manual_scenario",
-            "findings": matching[["Finding", "Evidence"]].to_dict("records"),
-            "latest_selected_record": snapshot,
-        }
-        signature = json.dumps(config, sort_keys=True, default=str)
-        if st.button("Demonstrate suggested action" if not matching.empty else "Demonstrate scenario",
-                     key="environment_run", type="primary"):
-            demo_id = "DEMO-" + uuid4().hex[:8].upper()
-            stages = [
-                ("Capture evidence", f"Use the selected observations for {room}; retain their original timestamps."),
-                ("ServiceNow request â€” simulated", f"Illustrate a facilities request, reference {demo_id}. No ticket is created."),
-                ("Policy checks â€” simulated", action["checks"] + " Site checks and room-to-BMS mapping are assumed for this illustration, not verified."),
-                ("BMS gateway â€” simulated", command + " No gateway connection or command transmission occurs."),
-                ("Acknowledgement â€” simulated", "Show where gateway acceptance and actual equipment feedback would be recorded. Neither is available in this demo."),
-                ("Verify and restore â€” planned", action["follow_up"] + " No improvement or restoration is claimed by the simulation."),
-            ]
-            events = []
-            with st.status("Demonstrating the facilities workflowâ€¦", expanded=True) as status:
-                for number, (stage, detail) in enumerate(stages, 1):
-                    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                    events.append({"time_utc": stamp, "stage": stage, "detail": detail})
-                    st.write(f"**{number}. {stage}**")
-                    st.write(detail)
-                    time.sleep(.2)
-                status.update(label="Demonstration complete Â· no live action performed", state="complete", expanded=False)
-            payload = dict(config, mode="simulation", demo_reference=demo_id, events=events,
-                           service_now_ticket_id=None, command_sent=False,
-                           gateway_acknowledgement=None, measured_outcome=None)
-            st.session_state["environment_demo_run"] = {"signature": signature, "payload": payload}
-
-        result = st.session_state.get("environment_demo_run")
-        if result and result["signature"] == signature:
-            payload = result["payload"]
-            st.success(f"Demonstration complete for {room}. No ticket was created and no building settings were changed.")
-            with st.expander("Sequence of events Â· simulation", expanded=True):
-                for number, event in enumerate(payload["events"], 1):
-                    st.write(f"**{number}. {event['stage']}**")
-                    st.caption(f"{event['time_utc']} Â· demonstration timestamp")
-                    st.write(event["detail"])
-            st.download_button("Download demonstration record", json.dumps(payload, indent=2, default=str),
-                               "neat-workflow-demonstration.json", "application/json", key="environment_demo_download")
-
-
-def spaces():
-    u.shell("Spaces", "A better fit for every room.", "Separate how often a room is used from how well its size meets demand.")
-    ctx = u.context()
-    room = choose_room(ctx)
-    r = ctx["stats"].set_index("Room key").loc[room]
-    c = st.columns(4)
-    with c[0]: u.metric("Space utilisation", u.fmt(r["Utilisation %"], "%"), "Of observed room-hours", "utilisation", "space_util")
-    with c[1]: u.metric("Typical attendance", u.fmt(r["Typical attendance"], digits=1), "People, when occupied", "attendance", "space_att")
-    with c[2]: u.metric("Recorded capacity", u.fmt(r.Capacity), "Seats from source metadata", "fit", "space_cap")
-    with c[3]: u.metric("Observation coverage", u.fmt(r["Coverage %"], "%"), "Of selected operating hours", "coverage", "space_cov")
-    with st.container(key="panel_history"):
-        u.section("The evidence over time", "trend")
-        signal = st.selectbox("Signal", list(SIGNALS), key="room_signal")
-        room_trend(ctx, room, signal, "room_history")
-    with st.container(key="panel_room_findings"):
         u.section("Findings for this room", "focus", "room")
         found = ctx["issues"][ctx["issues"]["Room key"] == room]
         if found.empty: st.write("No findings meet the current evidence thresholds.")
         for _, f in found.iterrows():
-            st.write(f"**{f.Finding}** â€” {f.Evidence}")
+            st.write(f"**{f.Finding}** \u2014 {f.Evidence}")
             st.caption(f"Why it matters: {f['Why it matters']} Next step: {f['Next step']}.")
     with st.container(key="panel_room_comparison"):
         u.section("Compare your spaces", "fit", "comparison")
@@ -345,13 +25,13 @@ def environment():
         valid = seg[signal].notna() & seg["Device Status"].isin(["Online", "Unreported"])
         hours = seg.loc[valid, "Hours"].sum()
         scheduled = a.window_hours(ctx["start"], ctx["end"], ctx["office"])
-        st.caption(f"{signal} observation coverage: {u.fmt(100 * hours / scheduled if scheduled else np.nan, '%')} Â· {hours:.1f} observed hours")
+        st.caption(f"{signal} observation coverage: {u.fmt(100 * hours / scheduled if scheduled else np.nan, '%')} \xb7 {hours:.1f} observed hours")
         room_trend(ctx, room, signal, "environment_history")
-        if signal == "VOC": st.caption("VOC is shown in source units. Confirm whether the collector supplies VOC Index or concentration before applying a threshold; this is not measured COâ‚‚.")
+        if signal == "VOC": st.caption("VOC is shown in source units. Confirm whether the collector supplies VOC Index or concentration before applying a threshold; this is not measured CO\u2082.")
     environment_actions(ctx, room)
     with st.container(key="panel_environment_findings"):
         u.section("Conditions to investigate", "focus", "environment")
-        st.caption("Across the selected scope Â· warmth and brightness alone do not establish energy use")
+        st.caption("Across the selected scope \xb7 warmth and brightness alone do not establish energy use")
         finding_rows(ctx["issues"][ctx["issues"].Kind.isin(["warm", "light"])], "environment", 10, environment_evidence=True)
     u.footer()
 
@@ -365,7 +45,7 @@ def insights():
         choice = st.selectbox("Finding type", list(labels))
         issues = ctx["issues"]
         if labels[choice]: issues = issues[issues.Kind == labels[choice]]
-        st.caption(f"{len(issues)} findings Â· ordered by qualifying observed hours; this is not a financial ranking")
+        st.caption(f"{len(issues)} findings \xb7 ordered by qualifying observed hours; this is not a financial ranking")
         finding_rows(issues, "insights")
         csv_download(issues.drop(columns=["Rank", "Kind"]), "Download evidence and next steps", "neat-findings.csv", "insights_csv")
     with st.expander("What would strengthen the business case?"):
@@ -379,18 +59,18 @@ def operations():
     inv = ctx["inventory"]
     with st.container(key="panel_fleet"):
         u.section("Latest recorded room state", "fleet")
-        st.caption("One latest record per named room Â· timestamps reflect the selected date range")
+        st.caption("One latest record per named room \xb7 timestamps reflect the selected date range")
         columns = ["Room Name", "Location", "Device Status", "Platform", "Software Version", "Timestamp"]
         st.dataframe(inv[columns].sort_values(["Device Status", "Room Name"]), hide_index=True, width="stretch")
         st.dataframe(inv.Platform.value_counts().rename_axis("Platform").reset_index(name="Rooms"), hide_index=True, width="stretch")
         csv_download(inv[columns], "Download room state", "neat-room-state.csv", "fleet_csv")
     with st.container(key="panel_workflow"):
         u.section("Preview a facilities handoff", "workflow")
-        st.caption("Draft export only Â· no ticket, device command or building control is sent")
+        st.caption("Draft export only \xb7 no ticket, device command or building control is sent")
         issues = ctx["issues"]
         if issues.empty: st.write("A qualifying finding will make an evidence-backed handoff available here.")
         else:
-            idx = st.selectbox("Finding to include", list(issues.index), format_func=lambda i: f"{issues.loc[i, 'Room key']} Â· {issues.loc[i, 'Finding']}")
+            idx = st.selectbox("Finding to include", list(issues.index), format_func=lambda i: f"{issues.loc[i, 'Room key']} \xb7 {issues.loc[i, 'Finding']}")
             r = issues.loc[idx]
             payload = {"status": "draft_not_sent", "demonstration_data": bool(st.session_state.get("demo_mode")),
                        "room": r["Room key"], "finding": r.Finding, "evidence": r.Evidence,
