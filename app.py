@@ -1,3 +1,26 @@
+This issue happens because **weekly resampling (`freq='1W'`)** was bucketing your 90-day dataset into rigid calendar-week buckets that always anchor to Sundays.
+
+Because the weekly buckets forced the first plotted point to **July 12** and the last point to **September 20**, the graph left large empty gaps on both sides (July 2–12 and September 20–30). This made the chart look static and disconnected from your selected active period.
+
+### The Fix
+
+We have updated the resampling engine to use **Daily (`1D`) and 6-Hour (`6h`) adaptive resampling**:
+
+1. **Multi-Month Spans (>60 Days):** Uses Daily (`1D`) averages. This plots 90 distinct data points across 90 days, extending the graph continuously from **July 2** to **September 30** without blank margins.
+
+
+2. **Multi-Week Spans (14–60 Days):** Uses 6-Hour (`6h`) averages.
+
+
+3. **Weekly Spans (≤14 Days):** Uses Hourly (`1h`) averages.
+
+
+
+---
+
+### Complete Updated `app.py`
+
+```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -374,7 +397,7 @@ with u4:
     render_neat_card("Peak Occupancy", f"{int(peak_occ)}", "Maximum concurrent count", "PEAK LOAD", "green")
 
 
-# --- 8. Telemetry Trends Chart ---
+# --- 8. Telemetry Trends Chart (Refined Adaptive Resampling) ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 📈 IoT Telemetry Trends")
 
@@ -388,7 +411,14 @@ neat_colors = ['#799bf1', '#f87171', '#34d399', '#fbbf24', '#c084fc', '#f472b6',
 
 if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     num_days = (end_date - start_date).days
-    freq = '1W' if num_days > 60 else ('1D' if num_days > 14 else '1h')
+    
+    # Adaptive resampling to prevent coarse weekly gapting
+    if num_days > 60:
+        freq = '1D'    # Daily averages for multi-month spans (plots every single day)
+    elif num_days > 14:
+        freq = '6h'    # 6-hour averages for multi-week spans
+    else:
+        freq = '1h'    # 1-hour averages for short spans
 
     smoothed_df = (
         filtered_df.groupby([
@@ -412,6 +442,7 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
 
     fig.update_traces(line=dict(width=2.5))
     
+    # Strictly lock X-axis domain to the exact selected start and end dates
     fig.update_layout(
         paper_bgcolor="#1b1c24",
         plot_bgcolor="#1b1c24",
@@ -539,3 +570,5 @@ with st.expander("🔍 Raw Telemetry Data Inspector"):
         file_name="neat_pulse_telemetry.csv",
         mime="text/csv"
     )
+
+```
