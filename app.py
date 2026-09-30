@@ -29,6 +29,29 @@ st.markdown("""
         border-right: 1px solid #232533;
     }
 
+    /* Hide Default Streamlit Auto-Navigation to Use Custom Neat Menu */
+    [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+
+    /* Custom Teal Button Styling (Matching Admin Page) */
+    div.stButton > button:first-child {
+        background-color: #00e6a8 !important;
+        color: #121318 !important;
+        font-weight: 700 !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 10px 16px !important;
+        font-size: 0.95rem !important;
+        letter-spacing: -0.2px !important;
+        transition: all 0.2s ease !important;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #00c48c !important;
+        color: #121318 !important;
+        transform: translateY(-1px) !important;
+    }
+
     /* Custom Neat Header */
     .neat-header-container {
         display: flex;
@@ -209,15 +232,31 @@ raw_data = load_data()
 data = raw_data.dropna(subset=['Timestamp']).copy()
 
 
-# --- 3. Sidebar Filtering Controls ---
-st.sidebar.markdown("### **neat.** Controls")
+# --- 3. Sidebar Header & Navigation Menu (Matching Admin Style) ---
+st.sidebar.markdown("""
+    <div style="margin-bottom: 20px;">
+        <div style="font-size: 2.2rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">neat.</div>
+        <div style="font-size: 0.72rem; font-weight: 700; color: #8e95a7; letter-spacing: 1.5px; margin-top: 6px; text-transform: uppercase;">ENTERPRISE OPERATIONS</div>
+    </div>
+""", unsafe_allow_html=True)
 
-if st.sidebar.button("🔄 Sync Live Telemetry", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
+st.sidebar.markdown("<p style='font-size: 0.75rem; font-weight: 700; color: #8e95a7; letter-spacing: 1px; margin-bottom: 8px;'>MENU</p>", unsafe_allow_html=True)
+
+# Custom Menu Navigation Buttons
+try:
+    st.sidebar.page_link("app.py", label="Analytics", icon="📊")
+    st.sidebar.page_link("pages/Administration.py", label="Admin", icon="🛠️")
+    st.sidebar.page_link("pages/AI_Search.py", label="AI Search", icon="🌐")
+except Exception:
+    # Fallback if page paths differ in environment
+    st.sidebar.markdown("📊 **Analytics**")
+    st.sidebar.markdown("🛠️ Admin")
+    st.sidebar.markdown("🌐 AI Search")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("##### Filter Parameters")
+
+# --- 4. Global Filters Section ---
+st.sidebar.markdown("<p style='font-size: 0.75rem; font-weight: 700; color: #8e95a7; letter-spacing: 1px; margin-bottom: 8px;'>GLOBAL FILTERS</p>", unsafe_allow_html=True)
 
 today_date = pd.Timestamp.today().date()
 
@@ -228,9 +267,17 @@ else:
     min_data_date = today_date
     max_data_date = today_date
 
-# Quick Date Preset Selector
+# Location Filter: Defaults strictly to "London EC" while keeping others selectable
+locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
+default_locations = [loc for loc in locations if 'london ec' in str(loc).lower()]
+if not default_locations and locations:
+    default_locations = locations
+
+selected_locations = st.sidebar.multiselect("📍 Location", options=locations, default=default_locations)
+
+# Date Preset Selector
 preset = st.sidebar.selectbox(
-    "Date Range Preset",
+    "🗓️ Date Range Preset",
     options=[
         "Last 7 Days (Last Week)",
         "Last 30 Days (Last Month)",
@@ -267,24 +314,22 @@ else:  # Custom Date Range
         start_date = min_data_date
         end_date = max_data_date
 
-st.sidebar.caption(f"🗓️ **Active Period:** `{start_date}` to `{end_date}`")
-
-# Location Filter: Defaults strictly to "London EC" while keeping others selectable
-locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
-default_locations = [loc for loc in locations if 'london ec' in str(loc).lower()]
-if not default_locations and locations:
-    default_locations = locations
-
-selected_locations = st.sidebar.multiselect("Locations", options=locations, default=default_locations)
-
+# Operating Hours Filter Window
 time_filter = st.sidebar.radio(
-    "Operating Hours Window",
+    "⏰ Operating Hours Window",
     options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 Full Telemetry"],
     index=0
 )
 
+st.sidebar.markdown("<br/>", unsafe_allow_html=True)
 
-# --- 4. Dataset Filtering Logic ---
+# Mint Teal Refresh Telemetry Button
+if st.sidebar.button("🔄 Refresh Telemetry", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
+
+
+# --- 5. Dataset Filtering Logic ---
 start_datetime = pd.to_datetime(start_date)
 end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
@@ -331,7 +376,7 @@ if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)" and not filtered_df.empt
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
 
-# --- 5. Main Dashboard Header ---
+# --- 6. Main Dashboard Header ---
 st.markdown("""
     <div class="neat-header-container">
         <div class="neat-logo">neat.</div>
@@ -340,7 +385,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- 6. Environmental Overview Highlight Cards ---
+# --- 7. Environmental Overview Highlight Cards ---
 st.markdown("##### 🌐 Environmental Telemetry Highlights")
 c1, c2, c3, c4 = st.columns(4)
 
@@ -360,7 +405,7 @@ with c4:
 
 st.markdown("<br/>", unsafe_allow_html=True)
 
-# --- 7. Space Utilization & Energy Waste Highlight Cards ---
+# --- 8. Space Utilization & Energy Waste Highlight Cards ---
 st.markdown("##### ⚡ Space Efficiency & Operational Insights")
 u1, u2, u3, u4 = st.columns(4)
 
@@ -379,7 +424,7 @@ with u4:
     render_neat_card("Peak Occupancy", f"{int(peak_occ)}", "Maximum concurrent count", "PEAK LOAD", "green")
 
 
-# --- 8. Telemetry Trends Chart (Refined Adaptive Resampling) ---
+# --- 9. Telemetry Trends Chart (Refined Adaptive Resampling) ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 📈 IoT Telemetry Trends")
 
@@ -444,7 +489,7 @@ else:
     st.warning("No telemetry records matching the selected date range and parameters.")
 
 
-# --- 9. Room Utilization & Capacity Analysis ---
+# --- 10. Room Utilization & Capacity Analysis ---
 st.markdown("##### 📊 Room Utilization vs Capacity")
 
 if not filtered_df.empty and 'Room Name' in filtered_df.columns:
@@ -495,7 +540,7 @@ if not filtered_df.empty and 'Room Name' in filtered_df.columns:
         )
 
 
-# --- 10. Platform Ecosystem Distribution ---
+# --- 11. Platform Ecosystem Distribution ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 💻 Meeting Ecosystem Share")
 
@@ -538,7 +583,7 @@ if not filtered_df.empty and 'Platform' in filtered_df.columns:
         st.plotly_chart(fig_plat_bar, use_container_width=True)
 
 
-# --- 11. Raw Telemetry Inspector ---
+# --- 12. Raw Telemetry Inspector ---
 st.markdown("---")
 with st.expander("🔍 Raw Telemetry Data Inspector"):
     st.dataframe(filtered_df, use_container_width=True)
