@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from workplace import analytics as a
+from workplace.executive import evidence_summary
 from workplace.data import load, fetch
 from workplace.help import HELP, WHY
 
@@ -182,7 +183,9 @@ def context():
     samples, inv, stats, summary, issues, previous = analysis(scope, fetched, room_keys, start, end, mode == "Office hours", warm, bright, minimum)
     ctx = dict(data=scope, samples=samples, inventory=inv, stats=stats, summary=summary, issues=issues, previous=previous,
                start=start, end=end, office=mode == "Office hours", quality=quality, fetched=fetched,
-               excluded=len(a.inventory(scope[scope.Timestamp <= end]))-len(inv), thresholds=dict(warm=warm, bright=bright, minimum=minimum))
+               excluded=len(a.inventory(scope[scope.Timestamp <= end]))-len(inv), thresholds=dict(warm=warm, bright=bright, minimum=minimum),
+               demo=bool(st.session_state.get("demo_mode", False)),
+               latest_source=scope.loc[scope["Room key"].isin(room_keys), "Timestamp"].max())
     with col1:
         st.html(f'<div class="scope-note">{start:%d %b} – {end:%d %b %Y, %H:%M} · Recorded source time · {len(inv)} rooms</div>')
     with col2:
@@ -199,9 +202,25 @@ def context():
             st.caption("Room capacity comes from available metadata; unknown values are never assumed to be four seats. Retired assets and room aliases should be resolved in the collector.")
             if quality["status_unreported"]:
                 st.warning("This source does not report device status; coverage cannot exclude offline devices.")
-    if pd.notna(summary["coverage"]) and summary["coverage"] < 70:
-        st.caption("Limited observation coverage — interpret comparisons cautiously. Open Data quality for the denominator.")
+    evidence_banner(ctx)
     return ctx
+
+
+def evidence_banner(ctx):
+    q, s = evidence_summary(ctx), ctx["summary"]
+    latest = "Unknown" if pd.isna(q["latest"]) else f"{q['latest']:%d %b %Y, %H:%M}"
+    details = "Generated sample data — not customer evidence." if ctx["demo"] else "Missing readings stay unknown. Coverage measures completeness, not accuracy."
+    if q["status_unreported"]:
+        details += " Some source records do not report device status."
+    st.html(f'''<section class="evidence-banner evidence-{escape(q['tone'])}" aria-label="Evidence quality summary">
+      <div class="evidence-heading">{escape(q['label'])}</div>
+      <div class="evidence-grid">
+        <div><strong>{fmt(q['coverage'], '%')} observed</strong><span>{s['valid_hours']:,.1f} / {s['expected_hours']:,.1f} scheduled room-hours</span></div>
+        <div><strong>{q['rooms_ready']} of {q['rooms_total']} rooms at 70%+</strong><span>Review threshold · not an accuracy score</span></div>
+        <div><strong>{escape(latest)}</strong><span>Latest source reading for selected rooms · source clock</span></div>
+      </div>
+      <div class="evidence-note">{escape(details)}</div>
+    </section>''')
 
 
 def plot_style(fig, height=300):

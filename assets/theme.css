@@ -45,6 +45,23 @@ div[class*="st-key-metric_help_"] button, div[class*="st-key-help_"] button {pad
 .roomfit-caption {font-size:14px;color:#4C515C;line-height:1.4;margin-top:6px;}
 .page-footer {font-size:11px;color:#4C515C;border-top:1px solid #E2E7E9;margin-top:28px;padding-top:17px;line-height:1.6;}
 .stAlert {border-radius:12px;}
+.evidence-banner {background:#EAF0F7;border:1px solid #D4DEEB;border-radius:14px;padding:16px 19px;margin:0 0 20px;}
+.evidence-limited {background:#FFF3E4;border-color:#EBD1A9;}
+.evidence-demo {background:#F0EBF8;border-color:#D6C9E9;}
+.evidence-heading {font-size:15px;font-weight:700;margin-bottom:10px;}
+.evidence-grid {display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:20px;}
+.evidence-grid strong {font-size:14px;display:block;}
+.evidence-grid span,.evidence-note {font-size:12px;color:#4C515C;line-height:1.5;}
+.evidence-note {margin-top:10px;}
+div[class*="st-key-decision_"] {background:#F4F6F8;border-radius:14px;padding:17px 18px;}
+.decision-number {font-size:10px;letter-spacing:1px;font-weight:700;color:#526CA8;margin-bottom:10px;}
+h3.decision-title {font-size:21px;line-height:1.2;letter-spacing:-.3px;padding:0;margin:0 0 10px;}
+.decision-scope {font-size:12px;font-weight:700;color:#526CA8;overflow-wrap:anywhere;margin-bottom:16px;}
+.decision-field {font-size:13px;line-height:1.45;margin-bottom:12px;}
+.decision-field strong {font-size:11px;color:#4C515C;}
+.decision-field p {margin:3px 0 0;}
+.decision-meta {font-size:11px;color:#4C515C;line-height:1.6;margin-bottom:12px;}
+@media(max-width:900px){.evidence-grid{grid-template-columns:1fr;gap:10px;}}
 @media(max-width:900px){.stMainBlockContainer{padding:1.5rem 1rem;} h1.hero{font-size:32px;} div[class*="st-key-card_"]{padding:14px;}.metric-value{font-size:38px;} .focus-head,.focus-row{grid-template-columns:1fr;gap:6px;} .focus-head{display:none;}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>

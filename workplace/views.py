@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import time
+from html import escape
 from datetime import datetime, timezone
 from uuid import uuid4
 import numpy as np
@@ -10,6 +11,8 @@ import streamlit as st
 from workplace import analytics as a
 from workplace import ui as u
 from workplace import visuals as v
+from workplace.executive import decision_actions
+from workplace.brief import pdf_brief
 
 SIGNALS = {"Occupancy": "People", "Temperature": "\xb0C", "Humidity": "% RH", "Light Level": "lux", "VOC": "Source units"}
 
@@ -79,6 +82,37 @@ def report(ctx):
     return "\n".join(lines)
 
 
+def executive_panel(ctx):
+    with st.container(key="panel_decisions"):
+        u.section("Decisions to explore", "focus")
+        st.caption("Data readiness first, then room candidates by observed evidence hours. Benefits need validation; this is not a financial ranking.")
+        actions = decision_actions(ctx)
+        columns = st.columns(len(actions), gap="medium")
+        for i, (column, action) in enumerate(zip(columns, actions)):
+            with column, st.container(key=f"decision_{i}"):
+                coverage = "" if action["coverage"] is None else f" · {action['coverage']:.0f}% coverage"
+                st.html(f'''<div class="decision-number">{i+1:02d} / INVESTIGATE</div>
+                  <h3 class="decision-title">{escape(action['title'])}</h3>
+                  <div class="decision-scope">{escape(action['scope'])}{escape(coverage)}</div>
+                  <div class="decision-field"><strong>What we observed</strong><p>{escape(action['evidence'])}</p></div>
+                  <div class="decision-field"><strong>Potential employee benefit</strong><p>{escape(action['benefit'])}</p></div>
+                  <div class="decision-field"><strong>Next step</strong><p>{escape(action['action'])}</p></div>
+                  <div class="decision-meta">Suggested owner: {escape(action['owner'])}<br>Cost: {escape(action['cost'])}</div>''')
+                with st.expander("How to assess the result"):
+                    st.write(action["measure"])
+                    st.caption("Agree a baseline, target, budget and review date with the owner before a pilot.")
+                if action["room_key"] and st.button("Explore evidence", key=f"decision_evidence_{i}", width="stretch"):
+                    u.go_room(action["room_key"])
+        st.write("")
+        c1, c2 = st.columns([1, 1], vertical_alignment="center")
+        with c1:
+            st.page_link("pages/Insights.py", label="View all findings", icon=":material/arrow_forward:")
+        with c2:
+            st.download_button("Download one-page decision brief", pdf_brief(ctx), "neat-workplace-decision-brief.pdf",
+                               "application/pdf", key="executive_pdf", type="primary", width="stretch")
+        st.caption("PDF follows your room, location, date and hours filters. Bookings, employee feedback and cost data are not connected.")
+
+
 def overview():
     u.shell("Overview", "Your workplace. Understood.", "See how your spaces work. Know where to focus next.")
     v.styles()
@@ -89,9 +123,11 @@ def overview():
         delta = f"{s['utilisation'] - previous['utilisation']:+.0f} percentage points vs previous period"
     cols = st.columns(4, gap="medium")
     with cols[0]: u.metric("Rooms monitored", str(s["rooms"]), "In your selected scope", "rooms", "rooms")
-    with cols[1]: u.metric("Space utilisation", u.fmt(s["utilisation"], "%"), "Of valid observed room-hours", "utilisation", "util", delta)
+    with cols[1]: u.metric("Time in use", u.fmt(s["utilisation"], "%"), "Share of valid observed room-hours", "utilisation", "util", delta)
     with cols[2]: u.metric("Typical attendance", u.fmt(s["attendance"], digits=1), "People, while rooms are occupied", "attendance", "attendance")
     with cols[3]: u.metric("Rooms to review", str(ctx["issues"]["Room key"].nunique()), "With evidence worth investigating", "reviews", "reviews")
+    st.write("")
+    executive_panel(ctx)
     st.write("")
     left, right = st.columns([1.55, 1], gap="medium")
     with left, st.container(key="panel_heatmap"):
@@ -101,11 +137,11 @@ def overview():
         fig = go.Figure(go.Heatmap(x=days, y=bands, z=z, customdata=observed, text=labels,
             texttemplate="%{text}", textfont={"size": 14}, colorscale=[[0, "#F0F3F8"], [.5, "#B9C9EC"], [1, u.BLUE]],
             zmin=0, zmax=100, showscale=False, xgap=7, ygap=7, hoverongaps=False,
-            hovertemplate="%{x} \xb7 %{y}<br>%{z:.1f}% occupied<br>%{customdata:.1f} observed room-hours<extra></extra>"))
+            hovertemplate="%{x} \xb7 %{y}<br>%{z:.1f}% of observed time in use<br>%{customdata:.1f} observed room-hours<extra></extra>"))
         u.plot_style(fig, 238)
         fig.update_yaxes(autorange="reversed", showgrid=False)
         chart(fig, "demand_heatmap")
-        st.caption("Light \u2192 dark: 0\u2013100% occupied \xb7 gaps: no valid observations")
+        st.caption("Light \u2192 dark: 0\u2013100% of observed time in use \xb7 gaps: no valid observations. Seat capacity used is shown in Spaces.")
     with right, st.container(key="panel_fit"):
         u.section("Does the room fit?", "fit")
         fit = ctx["issues"].query("Kind == 'fit'")
@@ -119,14 +155,6 @@ def overview():
             v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
             if st.button("Explore this room", key="fit_room", type="primary"):
                 u.go_room(r["Room key"])
-    st.write("")
-    with st.container(key="panel_focus"):
-        u.section("Where to focus", "focus")
-        st.caption("Three rooms to start with \xb7 ranked by observed evidence hours")
-        finding_rows(ctx["issues"].drop_duplicates("Room key"), "overview", 3)
-        c1, c2 = st.columns([1, 1])
-        with c1: st.page_link("pages/Insights.py", label="View all findings", icon=":material/arrow_forward:")
-        with c2: st.download_button("Download workplace brief", report(ctx), "neat-workplace-brief.txt", "text/plain")
     u.footer()
 
 
