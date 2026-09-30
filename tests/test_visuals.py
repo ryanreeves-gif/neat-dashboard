@@ -7,6 +7,39 @@ from test_analytics import source
 from test_app import app
 
 
+def test_room_illustration_reaches_native_image_component_with_fractional_seat():
+    import base64
+    import xml.etree.ElementTree as ET
+    from streamlit.testing.v1 import AppTest
+
+    def display():
+        from workplace.visuals import capacity_bar
+        capacity_bar(2.7, 12, 6)
+
+    at = AppTest.from_function(display).run()
+    assert not at.exception
+    images = at.get("image")
+    assert len(images) == 1
+    url = images[0].proto.imgs[0].url
+    assert url.startswith("data:image/svg+xml;base64,")
+    svg = base64.b64decode(url.split(",", 1)[1]).decode("utf-8")
+    root = ET.fromstring(svg)
+    people = root.findall('.//{http://www.w3.org/2000/svg}g[@class="roomfit-person"]')
+    assert len(people) == 12
+    assert sum(float(p.attrib["data-filled"]) for p in people) == pytest.approx(2.7)
+    assert any(float(p.attrib["data-filled"]) == pytest.approx(.7) for p in people)
+    assert all("<svg" not in element.proto.body for element in at.get("html"))
+
+
+def test_room_images_are_emitted_on_overview_and_spaces():
+    at = app()
+    assert not at.exception
+    assert at.get("image")
+    at.switch_page("pages/Spaces.py").run()
+    assert not at.exception
+    assert at.get("image")
+
+
 def test_hourly_totals_preserve_gaps_offline_and_partial_hours():
     start, end = pd.Timestamp("2026-09-28 09:50"), pd.Timestamp("2026-09-28 12:05")
     d, _ = a.prepare(source(["2026-09-28 09:50", "2026-09-28 10:00", "2026-09-28 10:10", "2026-09-28 12:00"],

@@ -196,8 +196,12 @@ def capacity_bar(attendance, capacity, p90):
         note += ' Average attendance exceeds recorded capacity; review the room metadata.'
     st.html(f'<div class="visual-roomfit"><div class="visual-labels">'
             f'<span><strong>{attendance:.1f}</strong> typical people</span>'
-            f'<span>Average while occupied</span></div>{graphic}'
-            f'<div class="roomfit-legend"><span><i style="background:{BLUE}"></i>Typical attendance</span>'
+            f'<span>Average while occupied</span></div></div>')
+    # st.html uses an HTML-only sanitizer and removes inline SVG elements.
+    # The native image component supports SVG as an encoded image source.
+    with st.container(horizontal=True, horizontal_alignment="center"):
+        st.image(graphic, width=660)
+    st.html(f'<div class="visual-roomfit"><div class="roomfit-legend"><span><i style="background:{BLUE}"></i>Typical attendance</span>'
             f'<span><i style="background:#BDC8C5"></i>Remaining capacity</span></div>'
             f'<div class="roomfit-busy">{busy}</div><div class="roomfit-note">{note}</div></div>')
 
