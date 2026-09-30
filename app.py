@@ -34,7 +34,7 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Custom Teal Button Styling (Matching Admin Page) */
+    /* Custom Teal Button Styling */
     div.stButton > button:first-child {
         background-color: #00e6a8 !important;
         color: #121318 !important;
@@ -232,7 +232,14 @@ raw_data = load_data()
 data = raw_data.dropna(subset=['Timestamp']).copy()
 
 
-# --- 3. Sidebar Header & Navigation Menu (Matching Admin Style) ---
+# --- 3. Global Session State Initialization ---
+if 'global_preset' not in st.session_state:
+    st.session_state['global_preset'] = "Last 7 Days (Last Week)"
+if 'global_time_filter' not in st.session_state:
+    st.session_state['global_time_filter'] = "Office Hours (Mon-Fri, 8 AM - 7 PM)"
+
+
+# --- 4. Sidebar Header & Navigation Menu ---
 st.sidebar.markdown("""
     <div style="margin-bottom: 20px;">
         <div style="font-size: 2.2rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">neat.</div>
@@ -242,20 +249,18 @@ st.sidebar.markdown("""
 
 st.sidebar.markdown("<p style='font-size: 0.75rem; font-weight: 700; color: #8e95a7; letter-spacing: 1px; margin-bottom: 8px;'>MENU</p>", unsafe_allow_html=True)
 
-# Custom Menu Navigation Buttons
 try:
     st.sidebar.page_link("app.py", label="Analytics", icon="📊")
     st.sidebar.page_link("pages/Administration.py", label="Admin", icon="🛠️")
     st.sidebar.page_link("pages/AI_Search.py", label="AI Search", icon="🌐")
 except Exception:
-    # Fallback if page paths differ in environment
     st.sidebar.markdown("📊 **Analytics**")
     st.sidebar.markdown("🛠️ Admin")
     st.sidebar.markdown("🌐 AI Search")
 
 st.sidebar.markdown("---")
 
-# --- 4. Global Filters Section ---
+# --- 5. Global Filters Section (Session State Persistence) ---
 st.sidebar.markdown("<p style='font-size: 0.75rem; font-weight: 700; color: #8e95a7; letter-spacing: 1px; margin-bottom: 8px;'>GLOBAL FILTERS</p>", unsafe_allow_html=True)
 
 today_date = pd.Timestamp.today().date()
@@ -267,28 +272,32 @@ else:
     min_data_date = today_date
     max_data_date = today_date
 
-# Location Filter: Defaults strictly to "London EC" while keeping others selectable
+# Location Filter
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 default_locations = [loc for loc in locations if 'london ec' in str(loc).lower()]
 if not default_locations and locations:
     default_locations = locations
 
-selected_locations = st.sidebar.multiselect("📍 Location", options=locations, default=default_locations)
+if 'global_locations' not in st.session_state:
+    st.session_state['global_locations'] = default_locations
+
+selected_locations = st.sidebar.multiselect("📍 Location", options=locations, default=st.session_state['global_locations'])
+st.session_state['global_locations'] = selected_locations
 
 # Date Preset Selector
-preset = st.sidebar.selectbox(
-    "🗓️ Date Range Preset",
-    options=[
-        "Last 7 Days (Last Week)",
-        "Last 30 Days (Last Month)",
-        "Last 90 Days (Last 3 Months)",
-        "Full History",
-        "Custom Date Range"
-    ],
-    index=0
-)
+preset_options = [
+    "Last 7 Days (Last Week)",
+    "Last 30 Days (Last Month)",
+    "Last 90 Days (Last 3 Months)",
+    "Full History",
+    "Custom Date Range"
+]
 
-# Determine Start & End Dates based on Preset Selection
+preset_idx = preset_options.index(st.session_state['global_preset']) if st.session_state['global_preset'] in preset_options else 0
+
+preset = st.sidebar.selectbox("🗓️ Date Range Preset", options=preset_options, index=preset_idx)
+st.session_state['global_preset'] = preset
+
 if preset == "Last 7 Days (Last Week)":
     start_date = max(min_data_date, max_data_date - pd.Timedelta(days=7))
     end_date = max_data_date
@@ -314,22 +323,25 @@ else:  # Custom Date Range
         start_date = min_data_date
         end_date = max_data_date
 
-# Operating Hours Filter Window
-time_filter = st.sidebar.radio(
-    "⏰ Operating Hours Window",
-    options=["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 Full Telemetry"],
-    index=0
-)
+# Save exact start and end dates globally
+st.session_state['global_start_date'] = start_date
+st.session_state['global_end_date'] = end_date
+
+# Operating Hours Filter
+time_options = ["Office Hours (Mon-Fri, 8 AM - 7 PM)", "24/7 Full Telemetry"]
+time_idx = 0 if st.session_state['global_time_filter'].startswith("Office") else 1
+
+time_filter = st.sidebar.radio("⏰ Operating Hours Window", options=time_options, index=time_idx)
+st.session_state['global_time_filter'] = time_filter
 
 st.sidebar.markdown("<br/>", unsafe_allow_html=True)
 
-# Mint Teal Refresh Telemetry Button
 if st.sidebar.button("🔄 Refresh Telemetry", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
 
-# --- 5. Dataset Filtering Logic ---
+# --- 6. Dataset Filtering Logic ---
 start_datetime = pd.to_datetime(start_date)
 end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
@@ -369,14 +381,13 @@ if not filtered_df.empty and 'Location' in filtered_df.columns and 'Room Name' i
 
     filtered_df = filtered_df[filtered_df.apply(filter_london_ec_only, axis=1)]
 
-# Operating Hours Filter Guard
 if time_filter == "Office Hours (Mon-Fri, 8 AM - 7 PM)" and not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     is_weekday = filtered_df['Timestamp'].dt.dayofweek < 5
     is_work_hours = (filtered_df['Timestamp'].dt.hour >= 8) & (filtered_df['Timestamp'].dt.hour < 19)
     filtered_df = filtered_df[is_weekday & is_work_hours]
 
 
-# --- 6. Main Dashboard Header ---
+# --- 7. Main Dashboard Content ---
 st.markdown("""
     <div class="neat-header-container">
         <div class="neat-logo">neat.</div>
@@ -384,8 +395,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-
-# --- 7. Environmental Overview Highlight Cards ---
 st.markdown("##### 🌐 Environmental Telemetry Highlights")
 c1, c2, c3, c4 = st.columns(4)
 
@@ -405,7 +414,6 @@ with c4:
 
 st.markdown("<br/>", unsafe_allow_html=True)
 
-# --- 8. Space Utilization & Energy Waste Highlight Cards ---
 st.markdown("##### ⚡ Space Efficiency & Operational Insights")
 u1, u2, u3, u4 = st.columns(4)
 
@@ -423,8 +431,6 @@ with u3:
 with u4:
     render_neat_card("Peak Occupancy", f"{int(peak_occ)}", "Maximum concurrent count", "PEAK LOAD", "green")
 
-
-# --- 9. Telemetry Trends Chart (Refined Adaptive Resampling) ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 📈 IoT Telemetry Trends")
 
@@ -438,13 +444,7 @@ neat_colors = ['#799bf1', '#f87171', '#34d399', '#fbbf24', '#c084fc', '#f472b6',
 
 if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     num_days = (end_date - start_date).days
-    
-    if num_days > 60:
-        freq = '1D'    # Daily averages for multi-month spans
-    elif num_days > 14:
-        freq = '6h'    # 6-hour averages for multi-week spans
-    else:
-        freq = '1h'    # 1-hour averages for short spans
+    freq = '1D' if num_days > 60 else ('6h' if num_days > 14 else '1h')
 
     smoothed_df = (
         filtered_df.groupby([
@@ -467,7 +467,6 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     )
 
     fig.update_traces(line=dict(width=2.5))
-    
     fig.update_layout(
         paper_bgcolor="#1b1c24",
         plot_bgcolor="#1b1c24",
@@ -488,8 +487,6 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
 else:
     st.warning("No telemetry records matching the selected date range and parameters.")
 
-
-# --- 10. Room Utilization & Capacity Analysis ---
 st.markdown("##### 📊 Room Utilization vs Capacity")
 
 if not filtered_df.empty and 'Room Name' in filtered_df.columns:
@@ -539,8 +536,6 @@ if not filtered_df.empty and 'Room Name' in filtered_df.columns:
             hide_index=True
         )
 
-
-# --- 11. Platform Ecosystem Distribution ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 💻 Meeting Ecosystem Share")
 
@@ -582,8 +577,6 @@ if not filtered_df.empty and 'Platform' in filtered_df.columns:
         )
         st.plotly_chart(fig_plat_bar, use_container_width=True)
 
-
-# --- 12. Raw Telemetry Inspector ---
 st.markdown("---")
 with st.expander("🔍 Raw Telemetry Data Inspector"):
     st.dataframe(filtered_df, use_container_width=True)
