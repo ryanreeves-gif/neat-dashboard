@@ -269,8 +269,13 @@ else:  # Custom Date Range
 
 st.sidebar.caption(f"🗓️ **Active Period:** `{start_date}` to `{end_date}`")
 
+# Location Filter: Defaults strictly to "London EC" while keeping others selectable
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
-selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
+default_locations = [loc for loc in locations if 'london ec' in str(loc).lower()]
+if not default_locations and locations:
+    default_locations = locations
+
+selected_locations = st.sidebar.multiselect("Locations", options=locations, default=default_locations)
 
 time_filter = st.sidebar.radio(
     "Operating Hours Window",
@@ -389,7 +394,6 @@ neat_colors = ['#799bf1', '#f87171', '#34d399', '#fbbf24', '#c084fc', '#f472b6',
 if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
     num_days = (end_date - start_date).days
     
-    # Adaptive resampling to prevent coarse weekly gaps
     if num_days > 60:
         freq = '1D'    # Daily averages for multi-month spans
     elif num_days > 14:
@@ -419,7 +423,6 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
 
     fig.update_traces(line=dict(width=2.5))
     
-    # Strictly lock X-axis domain to the exact selected start and end dates
     fig.update_layout(
         paper_bgcolor="#1b1c24",
         plot_bgcolor="#1b1c24",
