@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from html import escape
+from uuid import uuid4
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -36,9 +37,14 @@ div.st-key-panel_focus,div.st-key-panel_room_findings,div.st-key-panel_environme
 .visual-strip .unobserved{background:repeating-linear-gradient(135deg,#E7E9ED,#E7E9ED 5px,#F6F7F8 5px,#F6F7F8 9px)}
 .visual-labels{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-size:13px;color:#4C515C}
 .visual-labels strong{color:#333}
-.visual-roomfit{margin:14px 0 12px}.visual-roomfit .track{height:20px;border-radius:6px;background:#E7EFFB;position:relative;margin:10px 0}
-.visual-roomfit .fill{height:100%;border-radius:6px;background:#557BC2}
-.visual-roomfit .peak{position:absolute;top:-4px;height:28px;width:3px;background:#333}
+.visual-roomfit{margin:14px 0 12px}
+.roomfit-picture{display:block;width:100%;height:auto;max-width:660px;margin:4px auto 8px}
+.roomfit-legend{display:flex;justify-content:center;gap:10px 22px;flex-wrap:wrap;font-size:12px;color:#4C515C;margin:2px 0 14px}
+.roomfit-legend span{display:inline-flex;align-items:center;gap:7px}
+.roomfit-legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.roomfit-busy{border-top:1px solid #CEDBD5;padding-top:12px;color:#4C515C;font-size:13px;line-height:1.5}
+.roomfit-busy strong{color:#333}
+.roomfit-note{color:#687383;font-size:11px;line-height:1.5;margin-top:6px}
 div[class*="st-key-finding_"]{border:1px solid #E3E8EF;border-radius:15px;padding:16px;background:#FFF;height:100%}
 div[class*="st-key-finding_"]:has(.finding-warm){background:#F7EDE9;border-top:4px solid #D69B8C}
 div[class*="st-key-finding_"]:has(.finding-light){background:#FAF5E7;border-top:4px solid #DBC684}
@@ -128,14 +134,72 @@ def balance_strip(hourly):
     st.html(f'<div class="visual-strip" role="img" aria-label="Selected period: {escape(str(dict(zip(labels, values))))}">{pieces}</div><div class="visual-labels">{caption}</div>')
 
 
+def room_capacity_svg(attendance, capacity):
+    """One silhouette per recorded seat, with exact fractional average fills."""
+    seats = int(capacity)
+    if seats < 1 or seats != capacity or not np.isfinite(attendance) or attendance < 0:
+        raise ValueError("Room illustration requires whole seats and valid attendance.")
+    uid = "roomfit-" + uuid4().hex
+    # Alternate across the table so a small group feels naturally seated.
+    ends = 2 if seats >= 6 else 0
+    side_count = seats - ends
+    top_count, bottom_count = (side_count + 1) // 2, side_count // 2
+    wide = max(560, top_count * 56 + 160)
+    table_left, table_right = 78, wide - 78
+    positions = []
+    for i in range(top_count):
+        x = table_left + (i + .5) * (table_right - table_left) / top_count
+        positions.append((x, 40))
+        if i < bottom_count:
+            bx = table_left + (i + .5) * (table_right - table_left) / bottom_count
+            positions.append((bx, 226))
+    if ends:
+        positions.extend([(32, 133), (wide - 32, 133)])
+    silhouette = '<circle cx="0" cy="-12" r="9"/><path d="M-8 1 Q-15 2 -17 10 L-20 22 Q-21 27 -15 27 H15 Q21 27 20 22 L17 10 Q15 2 8 1 Z"/>'
+    people = []
+    for i, (x, y) in enumerate(positions):
+        filled = min(1.0, max(0.0, float(attendance) - i))
+        shade = BLUE if filled == 1 else "#BDC8C5"
+        person = f'<g fill="{shade}">{silhouette}</g>'
+        if 0 < filled < 1:
+            clip = f"{uid}-{i}"
+            # Horizontal clipping preserves the decimal, e.g. 2.7 = 2 + 70%.
+            person += (f'<defs><clipPath id="{clip}" clipPathUnits="userSpaceOnUse">'
+                       f'<rect x="-21" y="-24" width="{42 * filled:.6f}" height="55"/>'
+                       f'</clipPath></defs><g fill="{BLUE}" clip-path="url(#{clip})">{silhouette}</g>')
+        people.append(f'<g class="roomfit-person" data-filled="{filled:.6f}" transform="translate({x:.2f} {y})">{person}</g>')
+    description = (f"Illustrative meeting table with {seats} seats. Average attendance while occupied: "
+                   f"{attendance:.1f} people. Blue represents average attendance; grey represents remaining capacity.")
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" class="roomfit-picture" viewBox="0 0 {wide} 270" '
+            f'role="img" aria-labelledby="{uid}-title"><title id="{uid}-title">{escape(description)}</title>'
+            f'<rect x="{table_left}" y="92" width="{table_right-table_left}" height="102" rx="38" fill="#D9E3DE"/>'
+            f'<rect x="{table_left}" y="86" width="{table_right-table_left}" height="102" rx="38" fill="#FFFFFF" stroke="#D6E1DB" stroke-width="1.5"/>'
+            f'<text x="{wide/2:g}" y="132" text-anchor="middle" font-family="Arial,sans-serif" font-size="29" font-weight="700" fill="#333333">{seats} seats</text>'
+            f'<text x="{wide/2:g}" y="154" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="#687383">ROOM CAPACITY</text>'
+            + ''.join(people) + '</svg>')
+
+
 def capacity_bar(attendance, capacity, p90):
-    if pd.isna(capacity) or capacity <= 0 or pd.isna(attendance):
+    """Render the room illustration; retain the callable used by both pages."""
+    if (pd.isna(capacity) or pd.isna(attendance) or not np.isfinite(capacity)
+            or not np.isfinite(attendance) or capacity <= 0 or attendance < 0):
         st.caption("Occupied observations and recorded capacity are needed to show room fit.")
         return
-    width = min(100, 100 * attendance / capacity)
-    peak = min(100, 100 * p90 / capacity) if pd.notna(p90) else None
-    marker = f'<div class="peak" style="left:calc({peak:.3f}% - 2px)"></div>' if peak is not None else ''
-    st.html(f'<div class="visual-roomfit"><div class="visual-labels"><span><strong>{attendance:.1f}</strong> typical people</span><span><strong>{capacity:g}</strong> seats</span></div><div class="track" role="img" aria-label="Typical attendance {attendance:.1f} out of {capacity:g} seats"><div class="fill" style="width:{width:.3f}%"></div>{marker}</div><div class="small-muted">Dark marker: 90% of occupied time had {u.fmt(p90)} people or fewer.</div></div>')
+    if int(capacity) != capacity:
+        st.caption("A whole-number room capacity is needed to draw one person per seat.")
+        return
+    graphic = room_capacity_svg(attendance, capacity)
+    busy = (f'90% of occupied time: <strong>{u.fmt(p90)} people or fewer</strong>.'
+            if pd.notna(p90) and np.isfinite(p90) else 'Busy-period attendance is unavailable.')
+    note = 'Illustrative layout. Part-filled people show the fractional average.'
+    if attendance > capacity:
+        note += ' Average attendance exceeds recorded capacity; review the room metadata.'
+    st.html(f'<div class="visual-roomfit"><div class="visual-labels">'
+            f'<span><strong>{attendance:.1f}</strong> typical people</span>'
+            f'<span>Average while occupied</span></div>{graphic}'
+            f'<div class="roomfit-legend"><span><i style="background:{BLUE}"></i>Typical attendance</span>'
+            f'<span><i style="background:#BDC8C5"></i>Remaining capacity</span></div>'
+            f'<div class="roomfit-busy">{busy}</div><div class="roomfit-note">{note}</div></div>')
 
 
 def occupancy_figure(hourly, typical=False):
