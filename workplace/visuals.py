@@ -202,10 +202,12 @@ def capacity_bar(attendance, capacity, p90):
             f'<div class="roomfit-busy">{busy}</div><div class="roomfit-note">{note}</div></div>')
 
 
-def occupancy_figure(hourly, typical=False):
-    """Cells display observed-time occupancy, never convert unknown to empty."""
-    if hourly.empty:
+def occupancy_figure(hourly, typical=False, capacity=None):
+    """Average people / recorded seats; observed empty time stays in the mean."""
+    if (hourly.empty or capacity is None or pd.isna(capacity)
+            or not np.isfinite(capacity) or capacity <= 0):
         return go.Figure()
+    seats = float(capacity)
     hour_numbers = sorted(hourly.index.hour.unique())
     if typical:
         grouped = hourly.groupby([hourly.index.dayofweek, hourly.index.hour])[["Expected", "Observed", "Occupied", "Person hours"]].sum()
@@ -215,6 +217,7 @@ def occupancy_figure(hourly, typical=False):
         grouped = hourly.groupby([hourly.index.normalize(), hourly.index.hour])[["Expected", "Observed", "Occupied", "Person hours"]].sum()
         rows = sorted(hourly.index.normalize().unique())
         labels = [d.strftime("%a %d %b") for d in rows]
+    # Reserve a small grey band below zero exclusively for unknown cells.
     z = np.full((len(rows), len(hour_numbers)), -1.0)
     texts = np.full(z.shape, "?", dtype=object)
     hover = np.empty(z.shape, dtype=object)
@@ -227,11 +230,16 @@ def occupancy_figure(hourly, typical=False):
                 continue
             cell = grouped.loc[index]
             coverage = 100 * cell.Observed / cell.Expected if cell.Expected else 0
-            usage = 100 * cell.Occupied / cell.Observed if cell.Observed else np.nan
-            if coverage >= 50 and pd.notna(usage):
-                z[i, j] = usage
-                texts[i, j] = f"{usage:.0f}" + ("*" if coverage < 90 else "")
-            hover[i, j] = f"Occupied: {u.fmt(usage, '%')} of observed time<br>Coverage: {coverage:.0f}%<br>Observed: {cell.Observed:.2f} / {cell.Expected:.2f} h"
+            people = cell["Person hours"] / cell.Observed if cell.Observed else np.nan
+            capacity_used = 100 * people / seats
+            if coverage >= 50 and pd.notna(people):
+                z[i, j] = capacity_used
+                number = "<0.1" if 0 < capacity_used < .1 else f"{capacity_used:.1f}".removesuffix(".0")
+                texts[i, j] = number + "%" + ("*" if coverage < 90 else "")
+            average_label = (f"Average capacity used: {capacity_used:.1f}%<br>Average people: {people:.2f} / {seats:g} seats" if coverage >= 50 and pd.notna(people)
+                             else "Average unavailable: limited / missing observations")
+            hover[i, j] = (f"{average_label}<br>Includes observed empty periods"
+                            f"<br>Coverage: {coverage:.0f}%<br>Observed: {cell.Observed:.2f} / {cell.Expected:.2f} h")
     scale = [[0, UNKNOWN], [.009, UNKNOWN], [.0099, PALE], [.25, "#C4D5F2"], [.50, "#9BB8E6"], [.75, "#7596CE"], [1, "#557BC2"]]
     fig = go.Figure(go.Heatmap(x=[f"{h:02d}:00" for h in hour_numbers], y=labels, z=z,
         zmin=-1, zmax=100, colorscale=scale, showscale=False, text=texts, texttemplate="%{text}",
@@ -240,7 +248,7 @@ def occupancy_figure(hourly, typical=False):
     u.plot_style(fig, max(235, 62 + len(rows) * 38))
     fig.update_yaxes(autorange="reversed", showgrid=False, tickfont=dict(size=13), fixedrange=True)
     fig.update_xaxes(side="top", tickfont=dict(size=12), fixedrange=True)
-    fig.update_layout(margin=dict(l=5, r=6, t=30, b=5))
+    fig.update_layout(margin=dict(l=5, r=6, t=30, b=5), meta={"metric": "average_capacity_used", "capacity": seats})
     return fig
 
 
@@ -262,15 +270,24 @@ def occupancy_pattern(ctx, room, key):
             index = st.selectbox("Days to display", range(len(windows)), index=len(windows)-1,
                 format_func=lambda i: f"{windows[i][0]:%d %b %Y} to {windows[i][-1]:%d %b %Y}", key=f"{key}_window")
             show = hourly[hourly.index.normalize().isin(windows[index])]
-    st.caption("Each block = one hour. Numbers show % of observed time occupied.")
-    st.plotly_chart(occupancy_figure(show, mode == "Typical week"), width="stretch",
+    room_metadata = ctx["inventory"][ctx["inventory"]["Room key"] == room]
+    capacity = room_metadata.iloc[0].Capacity if not room_metadata.empty else None
+    if capacity is None or pd.isna(capacity) or not np.isfinite(capacity) or capacity <= 0:
+        st.info("Recorded room capacity is needed to show average capacity used.")
+        return
+    st.write("**Average capacity used**")
+    st.caption(f"Each block = one hour. Average people / {capacity:g} seats, including observed empty periods.")
+    fig = occupancy_figure(show, mode == "Typical week", capacity)
+    st.plotly_chart(fig, width="stretch",
                     config={"displayModeBar": False, "scrollZoom": False}, key=f"{key}_map")
-    st.html(f'<div class="visual-legend"><span><i style="background:{PALE}"></i>0% empty</span><span><i style="background:#9BB8E6"></i>50% mixed</span><span><i style="background:{BLUE}"></i>100% occupied</span><span><i style="background:{UNKNOWN}"></i>? limited / missing data</span></div>')
+    st.html(f'<div class="visual-legend"><span><i style="background:{PALE}"></i>0% capacity</span><span><i style="background:#9BB8E6"></i>50% capacity</span><span><i style="background:{BLUE}"></i>100% capacity</span><span><i style="background:{UNKNOWN}"></i>? limited / missing data</span><span>* partial coverage</span></div>')
     with st.expander("Read the pattern and inspect exact hours"):
-        st.write("Blue intensity shows occupancy during valid observations. A question mark means less than 50% of that hour was observed. An asterisk marks 50-89% coverage. Empty and unobserved time are kept separate in the bar above.")
+        st.write("Average capacity used = time-weighted average people / recorded room capacity. An average of 3.7 people in a 10-seat room gives 37%. Six people for half an observed hour and an empty room for the other half gives an average of three people. Missing time is excluded, rather than counted as empty. A question mark means less than 50% of that hour was observed; an asterisk marks 50-89% coverage.")
+        st.caption("The colour scale is 0-100% of recorded seats. Values above 100% retain their number and use the darkest blue; review the people counts and room capacity. The room illustration shows average attendance only while occupied, so its number can differ from an hourly average that includes empty periods.")
         st.caption("Typical week combines the selected dates using observed hours as weights. The bar above always covers the full selected period. Times follow the source clock.")
         table = hourly[["Observed", "Occupied", "Utilisation", "Coverage", "People"]].copy().round(1)
-        table.columns = ["Observed hours", "Occupied hours", "Occupied %", "Coverage %", "Average people"]
+        table.columns = ["Observed hours", "Hours with people", "Time in use (%)", "Coverage %", "Average people"]
+        table["Average capacity used (%)"] = (100 * hourly.People / capacity).round(1)
         st.dataframe(table, width="stretch")
 
 
