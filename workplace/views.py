@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from workplace import analytics as a
 from workplace import ui as u
+from workplace import visuals as v
 
 SIGNALS = {"Occupancy": "People", "Temperature": "\xb0C", "Humidity": "% RH", "Light Level": "lux", "VOC": "Source units"}
 
@@ -31,32 +32,31 @@ def focus_environment(room_key, kind):
     st.session_state["environment_action_room"] = room_key
 
 
-def finding_rows(issues, prefix, limit=None, environment_evidence=False):
+def finding_rows(issues, prefix, limit=None, environment_evidence=False, show_room=True):
     if issues.empty:
         st.write("No findings meet the current evidence thresholds.")
-        st.caption("Check observation coverage and the selected period before drawing a conclusion.")
         return
     show = issues.head(limit) if limit else issues
-    for i, row in show.reset_index(drop=True).iterrows():
-        c1, c2, c3, c4 = st.columns([1.4, 2.4, 2.4, .8], vertical_alignment="center")
-        with c1:
-            st.write(f"**{row['Room']}**")
-            st.caption(row.Location)
-        with c2:
-            st.write(row.Finding)
-            st.caption(row.Evidence)
-        with c3:
-            st.write(row["Next step"])
-            st.caption(f"Suggested owner: {row.Owner}")
-        with c4:
-            if environment_evidence:
-                st.button("Evidence", key=f"evidence_{prefix}_{i}",
-                          help=f"Show conditions and suggested actions for {row['Room']}",
-                          on_click=focus_environment, args=(row["Room key"], row.Kind))
-            elif st.button("Evidence", key=f"evidence_{prefix}_{i}", help=f"Open observations for {row['Room']}"):
-                u.go_room(row["Room key"])
-        if i < len(show) - 1:
-            st.divider()
+    st.caption("Bar lengths compare observed evidence hours across these cards.")
+    largest = show["Evidence hours"].max()
+    rows = show.reset_index(drop=True)
+    for start in range(0, len(rows), 3):
+        columns = st.columns(min(3, len(rows) - start), gap="medium")
+        for column, (i, row) in zip(columns, rows.iloc[start:start+3].iterrows()):
+            with column, st.container(key=f"finding_{prefix}_{i}"):
+                v.finding_summary(row, largest, show_room)
+                with st.expander("Details and next step"):
+                    st.write(row.Evidence)
+                    st.caption(row["Why it matters"])
+                    st.write(f"**Next step:** {row['Next step']}")
+                    st.caption(f"Owner: {row.Owner}")
+                if environment_evidence:
+                    st.button("Evidence", key=f"evidence_{prefix}_{i}", width="stretch",
+                              help=f"Show conditions and suggested actions for {row['Room']}",
+                              on_click=focus_environment, args=(row["Room key"], row.Kind))
+                elif show_room and st.button("Evidence", key=f"evidence_{prefix}_{i}", width="stretch",
+                                             help=f"Open observations for {row['Room']}"):
+                    u.go_room(row["Room key"])
 
 
 def report(ctx):
@@ -81,6 +81,7 @@ def report(ctx):
 
 def overview():
     u.shell("Overview", "Your workplace. Understood.", "See how your spaces work. Know where to focus next.")
+    v.styles()
     ctx = u.context()
     s, previous = ctx["summary"], ctx["previous"]
     delta = None
@@ -115,9 +116,7 @@ def overview():
             r = candidates[candidates["Room key"] == fit.iloc[0]["Room key"]].iloc[0] if not fit.empty else candidates.sort_values("Occupied hours", ascending=False).iloc[0]
             st.write(f"**{r['Room Name']}**")
             st.caption(r.Location)
-            st.html(f'<div class="roomfit"><div><div class="roomfit-number">{u.fmt(r["Typical attendance"], digits=1)}</div><div class="roomfit-caption">typical people</div></div><div><div class="roomfit-number">{u.fmt(r.Capacity)}</div><div class="roomfit-caption">available seats</div></div></div>')
-            st.write(f"90% of observed occupied time: **{u.fmt(r['P90 attendance'])} people or fewer**.")
-            st.caption("Review the room mix against peak demand." if not fit.empty else "An example from the most-used rooms in this scope.")
+            v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
             if st.button("Explore this room", key="fit_room", type="primary"):
                 u.go_room(r["Room key"])
     st.write("")
@@ -132,28 +131,28 @@ def overview():
 
 
 def room_trend(ctx, room_key, signal, key):
-    raw = ctx["data"]
-    r = raw[(raw["Room key"] == room_key) & raw.Timestamp.between(ctx["start"], ctx["end"])].copy()
     if signal == "Occupancy":
-        seg = ctx["samples"][ctx["samples"]["Room key"] == room_key]
-        x, y = [], []
-        for _, row in seg.iterrows():
-            value = row.Occupancy if row["Valid hours"] > 0 else None
-            x.extend([row.Start, row.End, None]); y.extend([value, value, None])
-        fig = go.Figure(go.Scatter(x=x, y=y, mode="lines", line={"color": u.BLUE, "width": 2}, name="Observed people", connectgaps=False))
-        st.caption("Time-weighted observation intervals \xb7 gaps are unknown")
-    else:
-        if ctx["office"]:
-            r = r[(r.Timestamp.dt.dayofweek < 5) & r.Timestamp.dt.hour.between(8, 18)]
-        r.loc[~r["Device Status"].isin(["Online", "Unreported"]), signal] = np.nan
-        series = r.set_index("Timestamp")[signal].resample("h").mean()
-        if not series.notna().any():
-            st.info("No valid readings for this signal in the selected scope.")
-            return
-        fig = go.Figure(go.Scatter(x=series.index, y=series, mode="lines+markers", marker={"size": 3}, line={"color": u.BLUE, "width": 2}, connectgaps=False, name=signal))
-        st.caption("Hourly reading averages \xb7 gaps are unknown")
-    fig.update_yaxes(title=SIGNALS[signal], rangemode="tozero" if signal == "Occupancy" else "normal")
+        v.occupancy_pattern(ctx, room_key, key)
+        return
+    seg = ctx["samples"][ctx["samples"]["Room key"] == room_key]
+    series = v.hourly_sensor(seg, signal, ctx["start"], ctx["end"], ctx["office"])
+    series = series.reindex(pd.date_range(ctx["start"].floor("h"), ctx["end"].floor("h"), freq="h"))
+    if not series.notna().any():
+        st.info("No valid readings for this signal in the selected scope.")
+        return
+    fig = go.Figure(go.Scatter(x=series.index, y=series, mode="lines+markers", marker={"size": 6},
+        line={"color": v.BLUE, "width": 3.5}, connectgaps=False, name=signal,
+        hovertemplate=f"%{{x|%a %d %b, %H:%M}}<br>%{{y:.1f}} {SIGNALS[signal]}<extra></extra>"))
+    if signal in ("Temperature", "Light Level"):
+        threshold = ctx["thresholds"]["warm" if signal == "Temperature" else "bright"]
+        fig.add_hline(y=threshold, line_width=1.5, line_dash="dash", line_color=v.AMBER,
+                      annotation_text=f"Review level {threshold:g} {SIGNALS[signal]}", annotation_position="top left")
+        low, high = min(series.min(), threshold), max(series.max(), threshold)
+        padding = max((high-low)*.15, 1 if signal == "Temperature" else 5)
+        fig.update_yaxes(range=[max(0, low-padding) if signal == "Light Level" else low-padding, high+padding])
+    fig.update_yaxes(title=SIGNALS[signal])
     chart(u.plot_style(fig, 310), key)
+    st.caption("Hourly time-weighted readings \xb7 gaps remain unknown")
 
 
 def choose_room(ctx, label="Room"):
@@ -219,8 +218,7 @@ def environment_actions(ctx, room):
             st.write("**Manual scenario** \xb7 This action is not triggered by a qualifying finding for this room.")
         else:
             for _, f in matching.iterrows():
-                st.write(f"**{f.Finding}** \u2014 {f.Evidence}")
-            st.caption("A candidate for facilities review. Historical sensor evidence does not confirm current building equipment activity.")
+                st.caption(f"{f.Finding} \u00b7 {f['Evidence hours']:.1f} observed hours")
         if selected == "purge":
             st.caption("Air purge is a manual demonstration until the air-quality field, units and rule have been validated.")
 
@@ -233,7 +231,7 @@ def environment_actions(ctx, room):
                 target = st.number_input("Example temperature target (\xb0C)", 18.0, 26.0, 21.0, .5,
                                          key="environment_target")
             else:
-                st.caption("At expiry, the proposed workflow releases the override back to the building's normal control schedule.")
+                st.caption("Returns to the building schedule at expiry.")
         command = action["command"]
         if target is not None:
             command += f" of {target:g} \xb0C"
@@ -307,7 +305,7 @@ def environment_actions(ctx, room):
                  f"at expiry or the applicable occupancy trigger. Follow-up: {action['follow_up']}"),
             ]
             events = []
-            with st.status("Demonstrating the facilities workflow\u2026", expanded=True) as status:
+            with st.status("Demonstrating the facilities workflow\u2026", expanded=False) as status:
                 for number, (stage, detail) in enumerate(stages, 1):
                     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
                     events.append({"time_utc": stamp, "stage": stage, "detail": detail})
@@ -324,7 +322,8 @@ def environment_actions(ctx, room):
         if result and result["signature"] == signature:
             payload = result["payload"]
             st.success(f"Demonstration complete for {room}.")
-            with st.expander("Sequence of events", expanded=True):
+            v.workflow_map(payload["events"])
+            with st.expander("Technical sequence of events", expanded=False):
                 st.caption(f"Workflow reference: {payload['demo_reference']} \xb7 demonstration recorded at {payload['events'][0]['time_utc']}")
                 for number, event in enumerate(payload["events"], 1):
                     st.write(f"**{number}. {event['stage']}**")
@@ -335,6 +334,7 @@ def environment_actions(ctx, room):
 
 def spaces():
     u.shell("Spaces", "A better fit for every room.", "Separate how often a room is used from how well its size meets demand.")
+    v.styles()
     ctx = u.context()
     room = choose_room(ctx)
     r = ctx["stats"].set_index("Room key").loc[room]
@@ -344,40 +344,55 @@ def spaces():
     with c[2]: u.metric("Recorded capacity", u.fmt(r.Capacity), "Seats from source metadata", "fit", "space_cap")
     with c[3]: u.metric("Observation coverage", u.fmt(r["Coverage %"], "%"), "Of selected operating hours", "coverage", "space_cov")
     with st.container(key="panel_history"):
-        u.section("The evidence over time", "trend")
+        u.section("When is this room used?", "trend")
         signal = st.selectbox("Signal", list(SIGNALS), key="room_signal")
         room_trend(ctx, room, signal, "room_history")
+    with st.container(key="panel_selected_fit"):
+        u.section("People and available seats", "fit", "selected_room")
+        v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
     with st.container(key="panel_room_findings"):
         u.section("Findings for this room", "focus", "room")
         found = ctx["issues"][ctx["issues"]["Room key"] == room]
-        if found.empty: st.write("No findings meet the current evidence thresholds.")
-        for _, f in found.iterrows():
-            st.write(f"**{f.Finding}** \u2014 {f.Evidence}")
-            st.caption(f"Why it matters: {f['Why it matters']} Next step: {f['Next step']}.")
+        finding_rows(found, "selected_room", show_room=False)
     with st.container(key="panel_room_comparison"):
         u.section("Compare your spaces", "fit", "comparison")
         columns = ["Room Name", "Location", "Capacity", "Utilisation %", "Typical attendance", "P90 attendance", "Occupied hours", "Coverage %"]
-        st.dataframe(ctx["stats"][columns].round(1), hide_index=True, width="stretch")
-        csv_download(ctx["stats"][columns], "Download room comparison", "neat-room-comparison.csv", "room_comparison_csv")
-        raw = ctx["data"][(ctx["data"]["Room key"] == room) & ctx["data"].Timestamp.between(ctx["start"], ctx["end"])]
-        csv_download(raw, "Download source observations for this room", "neat-room-observations.csv", "room_source_csv")
+        compare = ctx["stats"].dropna(subset=["Utilisation %"]).sort_values("Utilisation %", ascending=False).head(12).iloc[::-1]
+        if not compare.empty:
+            fig = go.Figure(go.Bar(x=compare["Utilisation %"], y=compare["Room key"], orientation="h",
+                marker_color=[v.BLUE if coverage >= 70 else "#93ABB3" for coverage in compare["Coverage %"]],
+                text=[f"{value:.0f}%" for value in compare["Utilisation %"]], textposition="outside", cliponaxis=False,
+                customdata=compare["Coverage %"], hovertemplate="%{y}<br>Occupied: %{x:.1f}%<br>Coverage: %{customdata:.0f}%<extra></extra>"))
+            u.plot_style(fig, max(210, 42 * len(compare)))
+            fig.update_xaxes(range=[0, 110], ticksuffix="%", title="Occupied share of observed time")
+            fig.update_yaxes(showgrid=False)
+            chart(fig, "space_comparison")
+            st.caption("Up to 12 rooms, ordered by use. Grey bars have less than 70% observation coverage.")
+        with st.expander("All rooms and downloads"):
+            st.dataframe(ctx["stats"][columns].round(1), hide_index=True, width="stretch")
+            csv_download(ctx["stats"][columns], "Download room comparison", "neat-room-comparison.csv", "room_comparison_csv")
+            raw = ctx["data"][(ctx["data"]["Room key"] == room) & ctx["data"].Timestamp.between(ctx["start"], ctx["end"])]
+            csv_download(raw, "Download source observations for this room", "neat-room-observations.csv", "room_source_csv")
     u.footer()
 
 
 def environment():
     u.shell("Environment", "Make every space feel better.", "Understand room conditions and investigate recurring signals.")
+    v.styles()
     ctx = u.context()
     room = choose_room(ctx)
     with st.container(key="panel_environment"):
         u.section("Room conditions", "environment")
-        signal = st.selectbox("Environmental signal", ["Temperature", "Humidity", "Light Level", "VOC"], key="environment_signal")
+        signal = v.condition_tiles(ctx, room)
         seg = ctx["samples"][ctx["samples"]["Room key"] == room]
         valid = seg[signal].notna() & seg["Device Status"].isin(["Online", "Unreported"])
         hours = seg.loc[valid, "Hours"].sum()
         scheduled = a.window_hours(ctx["start"], ctx["end"], ctx["office"])
-        st.caption(f"{signal} observation coverage: {u.fmt(100 * hours / scheduled if scheduled else np.nan, '%')} \xb7 {hours:.1f} observed hours")
         room_trend(ctx, room, signal, "environment_history")
-        if signal == "VOC": st.caption("VOC is shown in source units. Confirm whether the collector supplies VOC Index or concentration before applying a threshold; this is not measured CO\u2082.")
+        with st.expander("Sensor coverage and interpretation"):
+            st.write(f"{signal} observation coverage: {u.fmt(100 * hours / scheduled if scheduled else np.nan, '%')} \xb7 {hours:.1f} observed hours")
+            st.caption("Review colours indicate the selected investigation levels, not a confirmed fault or health rating. Latest selected records can be historical.")
+            if signal == "VOC": st.write("VOC is shown in source units. Confirm whether the collector supplies VOC Index or concentration before applying a threshold; this is not measured CO\u2082.")
     environment_actions(ctx, room)
     with st.container(key="panel_environment_findings"):
         u.section("Conditions to investigate", "focus", "environment")
@@ -388,6 +403,7 @@ def environment():
 
 def insights():
     u.shell("Insights", "Evidence. Then action.", "Prioritise the next conversation with facilities and workplace teams.")
+    v.styles()
     ctx = u.context()
     with st.container(key="panel_insights"):
         u.section("All findings", "focus", "insights")
@@ -405,6 +421,7 @@ def insights():
 
 def operations():
     u.shell("Operations", "Keep the workplace ready.", "Review the latest recorded room state and prepare evidence for a handoff.")
+    v.styles()
     ctx = u.context()
     inv = ctx["inventory"]
     with st.container(key="panel_fleet"):
@@ -435,6 +452,7 @@ def operations():
 
 def ask():
     u.shell("Ask the data", "Start with a useful question.", "Clear answers grounded in the observations you have selected.")
+    v.styles()
     ctx = u.context()
     with st.container(key="panel_ask"):
         u.section("Explore a question", "ask")
