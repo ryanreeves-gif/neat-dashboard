@@ -118,15 +118,22 @@ def analysis(_data, fetched, rooms, start, end, office, warm, bright, minimum):
 
 def context():
     data, quality, fetched = load()
-    locations = sorted(data.Location.unique())
+    available = set(data.Location.unique())
+    locations = (sorted(available) if st.session_state.get("demo_mode", False)
+                 else [name for name in ("London EC", "Oslo EC") if name in available])
+    if not locations:
+        st.info("No room observations are available for London EC or Oslo EC.")
+        st.stop()
     default = ["London EC"] if "London EC" in locations else locations[:1]
-    st.session_state["locations"] = [x for x in st.session_state.get("locations", default) if x in locations]
-    c1, c2, c3, c4 = st.columns([3, 2.3, 2.6, 1.5], vertical_alignment="bottom")
+    previous_locations = st.session_state.get("locations", default)
+    selected_locations = [x for x in previous_locations if x in locations]
+    st.session_state["locations"] = default if previous_locations and not selected_locations else selected_locations
+    c1, c2, c3, c4 = st.columns([2.5, 2.8, 2.3, 2.4], vertical_alignment="bottom")
     with c1:
         selected = st.multiselect("Locations", locations, placeholder="Choose locations", **field_state("locations", default))
-    with c2:
-        preset = st.selectbox("Date range", ["Last 7 days", "Last 30 days", "Last 90 days", "Full history", "Custom dates"], **field_state("preset", "Last 7 days"))
     with c3:
+        preset = st.selectbox("Date range", ["Last 7 days", "Last 30 days", "Last 90 days", "Full history", "Custom dates"], **field_state("preset", "Last 7 days"))
+    with c4:
         mode = st.selectbox("Operating hours", ["Office hours", "All hours"], **field_state("hours", "Office hours"))
     if not selected:
         st.info("Select at least one location to explore its rooms.")
@@ -152,18 +159,22 @@ def context():
     end = min(pd.Timestamp(end_date) + pd.Timedelta(days=1), last)
     inv = a.inventory(scope[scope.Timestamp <= end])
     inv = inv[inv.Timestamp >= start]
-    with c4:
+    col1, col2, col3, col4 = st.columns([5, 2.5, 1.7, 1.9], vertical_alignment="center")
+    with col4:
         with st.popover("More filters", icon=":material/tune:", width="stretch"):
             include = st.toggle("Include unclassified and non-meeting assets", **field_state("include_assets", False))
-            eligible = inv if include else inv[inv.Capacity.gt(0)]
-            opts = sorted(eligible["Room key"].tolist())
-            st.session_state["room_filter"] = [x for x in st.session_state.get("room_filter", []) if x in opts]
-            chosen = st.multiselect("Rooms (blank means all)", opts, **field_state("room_filter", []))
             st.caption("Evidence thresholds · investigation settings")
             warm = st.number_input("Warm empty room (°C)", min_value=10.0, max_value=40.0, step=.5, **field_state("warm", 22.0))
             bright = st.number_input("Bright empty room (lux)", min_value=1.0, max_value=10000.0, step=10.0, **field_state("bright", 50.0))
             minimum = st.number_input("Minimum repeated evidence (hours)", min_value=.25, max_value=100.0, step=.25, **field_state("min_hours", 1.0))
             st.caption("Office hours: Mon–Fri, 08:00–19:00 in the source's recorded clock. No per-location timezone mapping is supplied.")
+    eligible = inv if include else inv[inv.Capacity.gt(0)]
+    opts = sorted(eligible["Room key"].tolist())
+    st.session_state["room_filter"] = [x for x in st.session_state.get("room_filter", []) if x in opts]
+    with c2:
+        chosen = st.multiselect("Rooms", opts, placeholder="All rooms",
+                                help="Filter the dashboard to one or more rooms. Clear the selection to show all rooms in the selected locations.",
+                                **field_state("room_filter", []))
     room_keys = tuple(chosen or opts)
     if not room_keys or end <= start:
         st.info("No meeting-room observations in this scope. Adjust the dates or include unclassified assets under More filters.")
@@ -172,7 +183,6 @@ def context():
     ctx = dict(data=scope, samples=samples, inventory=inv, stats=stats, summary=summary, issues=issues, previous=previous,
                start=start, end=end, office=mode == "Office hours", quality=quality, fetched=fetched,
                excluded=len(a.inventory(scope[scope.Timestamp <= end]))-len(inv), thresholds=dict(warm=warm, bright=bright, minimum=minimum))
-    col1, col2, col3 = st.columns([6, 3, 1.8], vertical_alignment="center")
     with col1:
         st.html(f'<div class="scope-note">{start:%d %b} – {end:%d %b %Y, %H:%M} · Recorded source time · {len(inv)} rooms</div>')
     with col2:
