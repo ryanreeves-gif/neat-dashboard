@@ -168,6 +168,10 @@ def load_data():
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
+    # SAFEGUARD 1: Filter out any misparsed future dates beyond today
+    now = pd.Timestamp.now()
+    data = data[data['Timestamp'] <= (now + pd.Timedelta(days=1))].copy()
+    
     platform_mapping = {
         'msteams': 'Microsoft Teams', 'zoom': 'Zoom', 'google_meet': 'Google Meet',
         'apphub': 'Neat App Hub', 'usb': 'BYOD (USB Mode)', 'avos': 'App Hub Partner', 'none': 'Unprovisioned'
@@ -215,13 +219,16 @@ if st.sidebar.button("🔄 Sync Live Telemetry", use_container_width=True):
 st.sidebar.markdown("---")
 st.sidebar.markdown("##### Filter Parameters")
 
+# SAFEGUARD 2: Bound max_date strictly to today's real-time date
+today_date = pd.Timestamp.today().date()
+
 if not data.empty and 'Timestamp' in data.columns:
     min_date = data['Timestamp'].min().date()
-    max_date = data['Timestamp'].max().date()
+    max_date = min(data['Timestamp'].max().date(), today_date)
     default_start = max(min_date, max_date - pd.Timedelta(days=7))
 else:
-    min_date = pd.Timestamp.today().date()
-    max_date = pd.Timestamp.today().date()
+    min_date = today_date
+    max_date = today_date
     default_start = min_date
 
 date_range = st.sidebar.date_input(
@@ -342,7 +349,7 @@ with u4:
     render_neat_card("Peak Occupancy", f"{int(peak_occ)}", "Maximum concurrent count", "PEAK LOAD", "green")
 
 
-# --- 8. Telemetry Trends Chart (Neat Palette & Enforced Calendar Bounds) ---
+# --- 8. Telemetry Trends Chart ---
 st.markdown("<br/>", unsafe_allow_html=True)
 st.markdown("##### 📈 IoT Telemetry Trends")
 
@@ -380,7 +387,6 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
 
     fig.update_traces(line=dict(width=2.5))
     
-    # ENFORCE CALENDAR PICKER BOUNDS ON PLOTLY X-AXIS
     fig.update_layout(
         paper_bgcolor="#1b1c24",
         plot_bgcolor="#1b1c24",
@@ -389,7 +395,7 @@ if not filtered_df.empty and 'Timestamp' in filtered_df.columns:
             gridcolor="#282a38", 
             zerolinecolor="#282a38", 
             title="Timeline",
-            range=[start_datetime, end_datetime]  # Explicitly locks X-axis domain to date_input selection
+            range=[start_datetime, end_datetime]
         ),
         yaxis=dict(gridcolor="#282a38", zerolinecolor="#282a38", title=metric_choice),
         legend=dict(title="Room Name", bgcolor="rgba(0,0,0,0)"),
