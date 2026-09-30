@@ -168,7 +168,7 @@ def load_data():
     data.columns = data.columns.str.strip()
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], dayfirst=True, errors='coerce')
     
-    # SAFEGUARD 1: Filter out any misparsed future dates beyond today
+    # Filter out misparsed future dates beyond today
     now = pd.Timestamp.now()
     data = data[data['Timestamp'] <= (now + pd.Timedelta(days=1))].copy()
     
@@ -219,30 +219,55 @@ if st.sidebar.button("🔄 Sync Live Telemetry", use_container_width=True):
 st.sidebar.markdown("---")
 st.sidebar.markdown("##### Filter Parameters")
 
-# SAFEGUARD 2: Bound max_date strictly to today's real-time date
 today_date = pd.Timestamp.today().date()
 
 if not data.empty and 'Timestamp' in data.columns:
-    min_date = data['Timestamp'].min().date()
-    max_date = min(data['Timestamp'].max().date(), today_date)
-    default_start = max(min_date, max_date - pd.Timedelta(days=7))
+    min_data_date = data['Timestamp'].min().date()
+    max_data_date = min(data['Timestamp'].max().date(), today_date)
 else:
-    min_date = today_date
-    max_date = today_date
-    default_start = min_date
+    min_data_date = today_date
+    max_data_date = today_date
 
-date_range = st.sidebar.date_input(
-    "Date Range",
-    value=(default_start, max_date),
-    min_value=min_date,
-    max_value=max_date
+# Quick Date Preset Selector
+preset = st.sidebar.selectbox(
+    "Date Range Preset",
+    options=[
+        "Last 7 Days (Last Week)",
+        "Last 30 Days (Last Month)",
+        "Last 90 Days (Last 3 Months)",
+        "Full History",
+        "Custom Date Range"
+    ],
+    index=0
 )
 
-if isinstance(date_range, tuple) and len(date_range) == 2:
-    start_date, end_date = date_range
-else:
-    start_date = default_start
-    end_date = max_date
+# Determine Start & End Dates based on Preset Selection
+if preset == "Last 7 Days (Last Week)":
+    start_date = max(min_data_date, max_data_date - pd.Timedelta(days=7))
+    end_date = max_data_date
+elif preset == "Last 30 Days (Last Month)":
+    start_date = max(min_data_date, max_data_date - pd.Timedelta(days=30))
+    end_date = max_data_date
+elif preset == "Last 90 Days (Last 3 Months)":
+    start_date = max(min_data_date, max_data_date - pd.Timedelta(days=90))
+    end_date = max_data_date
+elif preset == "Full History":
+    start_date = min_data_date
+    end_date = max_data_date
+else:  # Custom Date Range
+    date_range = st.sidebar.date_input(
+        "Custom Date Window",
+        value=(max(min_data_date, max_data_date - pd.Timedelta(days=7)), max_data_date),
+        min_value=min_data_date,
+        max_value=max_data_date
+    )
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        start_date = min_data_date
+        end_date = max_data_date
+
+st.sidebar.caption(f"🗓️ **Active Period:** `{start_date}` to `{end_date}`")
 
 locations = data['Location'].unique().tolist() if 'Location' in data.columns else []
 selected_locations = st.sidebar.multiselect("Locations", options=locations, default=locations)
