@@ -171,6 +171,7 @@ def environment_actions(ctx, room):
             "kind": "warm",
             "checks": "Confirm current vacancy, upcoming bookings and the actual HVAC operating mode.",
             "command": "Request the room's configured HVAC standby / eco mode",
+            "control_point": "the configured HVAC occupancy-mode point to the site's standby / eco value",
             "follow_up": "Check HVAC mode feedback and room conditions; restore the normal schedule when occupancy returns or the override expires.",
         },
         "temperature": {
@@ -178,6 +179,7 @@ def environment_actions(ctx, room):
             "kind": "warm",
             "checks": "Confirm current temperature, occupancy, the existing setpoint and permitted comfort limits.",
             "command": "Request a temporary room temperature target",
+            "control_point": "the configured room temperature-setpoint point to the selected target",
             "follow_up": "Check the accepted setpoint and subsequent temperature trend; an accepted command alone does not prove improved comfort.",
         },
         "lights": {
@@ -185,6 +187,7 @@ def environment_actions(ctx, room):
             "kind": "light",
             "checks": "Confirm current vacancy and bookings, actual lighting state and daylight contribution; exclude emergency lighting.",
             "command": "Request ordinary room lighting off with occupancy override enabled",
+            "control_point": "the configured ordinary-lighting command point to off, retaining occupancy override",
             "follow_up": "Check lighting circuit feedback; restore normal occupancy control when someone enters or the override expires.",
         },
         "purge": {
@@ -192,6 +195,7 @@ def environment_actions(ctx, room):
             "kind": None,
             "checks": "Validate the air-quality sensor, units and threshold; confirm the ventilation system supports a suitable boost sequence.",
             "command": "Request the building's configured timed ventilation boost",
+            "control_point": "the configured ventilation-boost point to the site's approved boost mode",
             "follow_up": "Check ventilation feedback and subsequent validated air-quality readings; restore the normal schedule when the boost expires.",
         },
     }
@@ -206,7 +210,7 @@ def environment_actions(ctx, room):
     with st.container(key="panel_environment_actions", border=True):
         st.subheader("Suggested action")
         st.caption(f"Selected room: {room}")
-        st.info("Control demonstration \xb7 ServiceNow and building controls are not connected. No commands are sent.")
+        st.info("For demonstration purposes only. No settings were changed.")
         selected = st.selectbox("Action to demonstrate", list(actions),
                                 format_func=lambda k: actions[k]["label"], key="environment_action")
         action = actions[selected]
@@ -235,9 +239,10 @@ def environment_actions(ctx, room):
             command += f" of {target:g} \xb0C"
         command += f" for {minutes} minutes."
         st.write(f"**Proposed action:** {command}")
-        with st.expander("What the live workflow would check"):
+        with st.expander("Integration design and checks"):
             st.write(action["checks"])
             st.write("Resolve this room to the correct BMS zone and control points; apply site permissions, interlocks and override limits.")
+            st.caption("ServiceNow endpoints, gateway connections, point names and permitted values would be configured for each building.")
             st.write(f"**Follow-up:** {action['follow_up']}")
 
         latest = ctx["inventory"].set_index("Room key").loc[room]
@@ -245,8 +250,9 @@ def environment_actions(ctx, room):
         for column in ["Occupancy", "Temperature", "Humidity", "Light Level", "VOC"]:
             value = latest.get(column)
             snapshot[column] = float(value) if pd.notna(value) else None
-        st.caption(f"Latest record in the selected period: {latest.Timestamp:%d %b %Y %H:%M} \xb7 recorded source time. This is not live BMS feedback.")
+        st.caption(f"Latest record in the selected period: {latest.Timestamp:%d %b %Y %H:%M} \xb7 recorded source time.")
         config = {
+            "workflow_version": 2,
             "room": room,
             "action": selected,
             "action_label": action["label"],
@@ -268,13 +274,37 @@ def environment_actions(ctx, room):
         if st.button("Demonstrate suggested action" if not matching.empty else "Demonstrate scenario",
                      key="environment_run", type="primary"):
             demo_id = "DEMO-" + uuid4().hex[:8].upper()
+            trigger = (
+                "evaluate the selected sensor observations against the investigation thresholds and attach the matching findings"
+                if not matching.empty else
+                "capture the operator-selected scenario and attach the available sensor observations"
+            )
+            control_point = action["control_point"]
+            if target is not None:
+                control_point += f" of {target:g} \xb0C"
             stages = [
-                ("Capture evidence", f"Use the selected observations for {room}; retain their original timestamps."),
-                ("ServiceNow request \u2014 simulated", f"Illustrate a facilities request, reference {demo_id}. No ticket is created."),
-                ("Policy checks \u2014 simulated", action["checks"] + " Site checks and room-to-BMS mapping are assumed for this illustration, not verified."),
-                ("BMS gateway \u2014 simulated", command + " No gateway connection or command transmission occurs."),
-                ("Acknowledgement \u2014 simulated", "Show where gateway acceptance and actual equipment feedback would be recorded. Neither is available in this demo."),
-                ("Verify and restore \u2014 planned", action["follow_up"] + " No improvement or restoration is claimed by the simulation."),
+                ("Event source",
+                 f"The Streamlit middleware would {trigger} for {room}. "
+                 "The Neat Pulse reporting feed would supply the room observations, with original timestamps retained for traceability."),
+                ("Middleware request",
+                 "The middleware would send an authenticated HTTPS POST with a JSON payload to a configured ServiceNow REST endpoint. "
+                 f"The payload would identify the room, action, {minutes}-minute duration, any temperature target, "
+                 f"sensor evidence and correlation reference {demo_id}."),
+                ("ServiceNow decision engine",
+                 "A configured ServiceNow workflow would validate the request, match the room to its building zone and apply facilities policy. "
+                 f"Checks: {action['checks']} "
+                 "It would route a permitted request to the building integration, or hold it for facilities review."),
+                ("BMS gateway and control",
+                 "An integration connector would pass the approved request to a BMS gateway, such as Tridium Niagara. "
+                 f"The gateway would map {room} to its commissioned control points and request {control_point} "
+                 f"for {minutes} minutes through the configured protocol, for example BACnet. "
+                 "The building controller would retain its operating limits and interlocks."),
+                ("Acknowledgement and feedback",
+                 f"The integration would return gateway acceptance and control-point readback to ServiceNow and the dashboard under {demo_id}. "
+                 "Request acceptance, confirmed equipment state, rejection and timeout would be tracked separately."),
+                ("Verify and restore",
+                 "The workflow would use fresh sensor readings and controller feedback to assess the result and release the temporary override "
+                 f"at expiry or the applicable occupancy trigger. Follow-up: {action['follow_up']}"),
             ]
             events = []
             with st.status("Demonstrating the facilities workflow\u2026", expanded=True) as status:
@@ -284,7 +314,7 @@ def environment_actions(ctx, room):
                     st.write(f"**{number}. {stage}**")
                     st.write(detail)
                     time.sleep(.2)
-                status.update(label="Demonstration complete \xb7 no live action performed", state="complete", expanded=False)
+                status.update(label="Workflow demonstration complete", state="complete", expanded=False)
             payload = dict(config, mode="simulation", demo_reference=demo_id, events=events,
                            service_now_ticket_id=None, command_sent=False,
                            gateway_acknowledgement=None, measured_outcome=None)
@@ -293,11 +323,11 @@ def environment_actions(ctx, room):
         result = st.session_state.get("environment_demo_run")
         if result and result["signature"] == signature:
             payload = result["payload"]
-            st.success(f"Demonstration complete for {room}. No ticket was created and no building settings were changed.")
-            with st.expander("Sequence of events \xb7 simulation", expanded=True):
+            st.success(f"Demonstration complete for {room}.")
+            with st.expander("Sequence of events", expanded=True):
+                st.caption(f"Workflow reference: {payload['demo_reference']} \xb7 demonstration recorded at {payload['events'][0]['time_utc']}")
                 for number, event in enumerate(payload["events"], 1):
                     st.write(f"**{number}. {event['stage']}**")
-                    st.caption(f"{event['time_utc']} \xb7 demonstration timestamp")
                     st.write(event["detail"])
             st.download_button("Download demonstration record", json.dumps(payload, indent=2, default=str),
                                "neat-workflow-demonstration.json", "application/json", key="environment_demo_download")
