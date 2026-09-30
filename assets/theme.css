@@ -1,0 +1,50 @@
+<style>
+:root { --neat-blue:#6A87D0; --neat-ink:#333333; --neat-muted:#4C515C; }
+.stApp, .stApp input, .stApp textarea, .stApp button, .stApp select,
+.stApp h1,.stApp h2,.stApp h3,.stApp p,.stApp label {font-family:MaisonNeue,"Helvetica Neue",Arial,sans-serif;}
+.stApp {background:#F6F7F8;color:var(--neat-ink);}
+.stMainBlockContainer {max-width:1560px;padding:2.2rem 2.3rem 3rem;}
+[data-testid="stSidebar"] {background:white;border-right:1px solid #E2E7E9;min-width:234px;max-width:234px;}
+[data-testid="stSidebarUserContent"] {padding:1.2rem 1.1rem;}
+[data-testid="stSidebarNav"] {display:none;}
+[data-testid="stToolbar"] {display:none;}
+.stAppHeader {background:transparent;}
+.brand {padding:0 16px 20px;}
+.brand img {width:124px;height:60px;display:block;margin:4px 0 25px;}
+.brand p {font-size:14px;color:#4C515C;margin:0 0 24px;}
+[data-testid="stSidebar"] [data-testid="stPageLink"] {margin:1px 0 6px;}
+[data-testid="stSidebar"] [data-testid="stPageLink"] a {padding:11px 13px;border-radius:12px;}
+[data-testid="stSidebar"] [data-testid="stPageLink"] a:hover {background:#F6F7F8;}
+[data-testid="stSidebar"] [aria-current="page"] {background:#ECEFF0;font-weight:700;}
+.nav-separator {height:1px;background:#ECEFF0;margin:22px 10px;}
+.sidebar-note {font-size:13px;color:#4C515C;line-height:1.6;margin:28px 16px;}
+.eyebrow {font-size:11px;font-weight:700;letter-spacing:1.3px;color:#4C515C;margin:0 0 25px;}
+h1.hero {font-size:clamp(32px,3vw,48px);line-height:1.12;font-weight:700;letter-spacing:-1.2px;margin:0;padding:0;}
+p.subtitle {font-size:19px;color:#4C515C;margin:10px 0 22px;line-height:1.5;}
+.scope-note {font-size:12px;color:#4C515C;line-height:1.5;margin:2px 0 12px;}
+div[class*="st-key-card_"] {background:white;border-radius:18px;padding:18px 20px 21px;min-height:172px;}
+.metric-label {font-size:16px;font-weight:700;line-height:1.3;}
+.metric-value {font-size:47px;font-weight:700;line-height:1.15;letter-spacing:-1px;margin:4px 0 6px;}
+.metric-detail {font-size:13px;line-height:1.4;color:#4C515C;}
+.metric-comparison {font-size:11px;color:#4C515C;margin-top:8px;}
+div[class*="st-key-panel_"] {background:white;border-radius:18px;padding:20px 24px;}
+h2.section-title {font-size:23px;line-height:1.3;font-weight:700;letter-spacing:-.35px;margin:0;padding:0;}
+div[data-testid="stPopover"] button {border-radius:16px;font-size:12px;}
+div[class*="st-key-metric_help_"] button, div[class*="st-key-help_"] button {padding:2px 4px;min-height:30px;}
+[data-testid="stPopoverBody"] {max-width:410px;line-height:1.5;}
+.stButton button,.stDownloadButton button {border-radius:20px;font-size:14px;}
+.stButton button[kind="primary"],.stDownloadButton button[kind="primary"] {background:#333;color:white;border-color:#333;}
+[data-baseweb="select"] > div {border-radius:18px;background:white;}
+[data-testid="stNumberInput"] input {background:white;}
+.focus-head,.focus-row {display:grid;grid-template-columns:1.1fr 1.65fr 1.75fr;gap:18px;align-items:center;}
+.focus-head {font-size:10px;font-weight:700;color:#4C515C;letter-spacing:.5px;border-bottom:1px solid #E2E7E9;padding:4px 0 12px;}
+.focus-row {padding:13px 0;font-size:14px;line-height:1.45;}
+.small-muted {font-size:12px;color:#4C515C;margin-top:3px;}
+.roomfit {display:flex;gap:28px;align-items:center;margin:16px 0;}
+.roomfit-number {font-size:30px;font-weight:700;line-height:1.2;}
+.roomfit-caption {font-size:14px;color:#4C515C;line-height:1.4;margin-top:6px;}
+.page-footer {font-size:11px;color:#4C515C;border-top:1px solid #E2E7E9;margin-top:28px;padding-top:17px;line-height:1.6;}
+.stAlert {border-radius:12px;}
+@media(max-width:900px){.stMainBlockContainer{padding:1.5rem 1rem;} h1.hero{font-size:32px;} div[class*="st-key-card_"]{padding:14px;}.metric-value{font-size:38px;} .focus-head,.focus-row{grid-template-columns:1fr;gap:6px;} .focus-head{display:none;}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
