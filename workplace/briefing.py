@@ -453,8 +453,8 @@ def run(active):
     index = next(i for i, row in enumerate(CHAPTERS) if row[0] == active)
     _, _, _, title, subtitle = CHAPTERS[index]
     u.shell(active, title, subtitle, briefing=True)
-    with st.sidebar.expander("Scope & data"):
-        ctx = u.context(show_evidence=False, compact=True)
+    with st.container(key="brief_filters"):
+        ctx = u.context(show_evidence=False, sidebar_details=True)
     case = finance_case(ctx)
     locations = ", ".join(sorted(ctx["inventory"].Location.unique()))
     scope = f"{locations} · {ctx['start']:%d %b}–{ctx['end']:%d %b %Y} · {'Office hours' if ctx['office'] else 'All hours'} · {len(ctx['inventory'])} rooms"

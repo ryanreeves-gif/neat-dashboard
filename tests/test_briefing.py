@@ -16,11 +16,17 @@ def test_four_chapters_keep_scope_and_can_return_to_the_full_dashboard():
     at = presentation()
     assert not at.exception
     assert at.toggle(key="_presentation_mode").value is True
-    at.selectbox(key="_preset").select("Last 30 days").run()
+    assert at.main.multiselect(key="_locations")
+    room = at.main.multiselect(key="_room_filter").options[0]
+    at.main.multiselect(key="_room_filter").set_value([room]).run()
+    at.main.selectbox(key="_preset").select("Last 30 days").run()
     for page in ["pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
         at.switch_page(page).run()
         assert not at.exception, [e.message for e in at.exception]
-        assert at.selectbox(key="_preset").value == "Last 30 days"
+        assert at.main.selectbox(key="_preset").value == "Last 30 days"
+        assert at.main.multiselect(key="_room_filter").value == [room]
+        assert at.main.multiselect(key="_locations").value == ["Example office"]
+        assert at.main.selectbox(key="_hours").value == "Office hours"
         assert at.toggle(key="_presentation_mode").value is True
     at.toggle(key="_presentation_mode").set_value(False).run()
     assert not at.exception

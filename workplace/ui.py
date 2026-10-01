@@ -147,7 +147,7 @@ def analysis(_data, fetched, rooms, start, end, office, warm, bright, minimum):
     return samples, inv, stats, summary, issues, previous
 
 
-def context(show_evidence=True, compact=False):
+def context(show_evidence=True, compact=False, sidebar_details=False):
     data, quality, fetched = load()
     available = set(data.Location.unique())
     locations = (sorted(available) if st.session_state.get("demo_mode", False)
@@ -191,8 +191,12 @@ def context(show_evidence=True, compact=False):
     end = min(pd.Timestamp(end_date) + pd.Timedelta(days=1), last)
     inv = a.inventory(scope[scope.Timestamp <= end])
     inv = inv[inv.Timestamp >= start]
-    col1, col2, col3, col4 = ([st.container() for _ in range(4)] if compact else
-                              st.columns([5, 2.5, 1.7, 1.9], vertical_alignment="center"))
+    if sidebar_details:
+        with st.sidebar.expander("Data & thresholds"):
+            col1, col2, col3, col4 = [st.container() for _ in range(4)]
+    else:
+        col1, col2, col3, col4 = ([st.container() for _ in range(4)] if compact else
+                                  st.columns([5, 2.5, 1.7, 1.9], vertical_alignment="center"))
     with col4:
         with st.popover("More filters", icon=":material/tune:", width="stretch"):
             include = st.toggle("Include unclassified and non-meeting assets", **field_state("include_assets", False))
