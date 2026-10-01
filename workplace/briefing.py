@@ -112,12 +112,14 @@ def leader_card(portfolio, measure):
         return
     row = rows.iloc[0]
     names = " / ".join(p.room_label(n) for n in rows["Room Name"])
+    if len(rows) > 2:
+        names = f"{len(rows)} rooms tied"
     score = f"{row['Utilisation %']:.1f}%" if is_use else f"{row.Sentiment:.2f}<small>/5</small>"
     width = row["Utilisation %"] if is_use else row.Sentiment * 20
     detail = (f"{row['Occupied hours']:.1f} occupied hours · {row['Coverage %']:.0f}% coverage" if is_use
               else f"{row.Responses} invented responses · {row.Positive:.0f}% positive")
     if len(rows) > 1:
-        detail = f"{len(rows)} rooms tied at the displayed precision · details on hover"
+        detail = f"{len(rows)} rooms tied · full scores in ‘How to read the room picture’"
     source = "Observed time in use" if is_use else "Synthetic space-experience ratings"
     html(f'<article class="brief-leader {"use" if is_use else "rating"}"><div class="brief-label">{label}</div>'
          f'<div class="brief-leader-main"><h3>{escape(names)}</h3><strong>{score}</strong></div>'

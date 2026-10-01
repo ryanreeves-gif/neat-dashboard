@@ -1,3 +1,5 @@
+"""Executive entry point: visual room performance and improvement choices."""
+
 from workplace.views import overview
 from workplace.briefing import enabled, run
 
