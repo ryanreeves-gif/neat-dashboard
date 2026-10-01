@@ -73,3 +73,15 @@ def test_feedback_audience_and_survey_dialog_remain_usable():
     assert not at.exception
     assert any("rate both" in w.value for w in at.warning)
     assert "feedback_tryouts" not in at.session_state
+    groups = at.get("button_group")
+    groups[1].set_value("Customer / guest")
+    groups[2].set_value(5)
+    groups[3].set_value(4)
+    next(b for b in at.button if b.label == "Share feedback").click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert len(at.session_state["feedback_tryouts"]) == 1
+    assert at.session_state["feedback_tryouts"][0]["source"] == "Interactive demonstration"
+    assert at.session_state["brief_survey_open"] is True
+    at.button(key="frame_next").click().run()
+    assert not at.exception
+    assert all(g.value is None for g in at.get("button_group")[1:])
