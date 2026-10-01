@@ -11,7 +11,7 @@ import json
 import pandas as pd
 import streamlit as st
 
-from workplace import analytics as a, conclusions as x, customer as c, ui as u, visuals as v
+from workplace import analytics as a, conclusions as x, customer as c, ui as u, visuals as v, portfolio as p
 from workplace.feedback import AUDIENCES, feedback_summary
 from workplace.peer_view import cached_peer
 from workplace.scenarios import room_evidence, evaluate_layout
@@ -19,8 +19,8 @@ from workplace.value import business_case
 from workplace.overview_view import money
 
 CHAPTERS = [
-    ("Overview", "app.py", "The conclusion", "Earn the commute. Make every space count.",
-     "Better spaces for people. Better decisions for the business."),
+    ("Overview", "app.py", "The current state", "How are your spaces performing?",
+     "See what works. Find the opportunity. Choose the right improvement."),
     ("Spaces", "pages/Spaces.py", "The right space", "The right space for the way people work.",
      "Match investment to real demand, then test a change before committing."),
     ("Feedback", "pages/Feedback.py", "The experience", "Give people a reason to come together.",
@@ -101,51 +101,142 @@ def room_picker(ctx, label="Room"):
                         **u.field_state("selected_room", options[0]))
 
 
+def leader_card(portfolio, measure):
+    rows = p.room_leaders(portfolio, measure)
+    is_use = measure == "usage"
+    label = "Most used room" if is_use else "Highest rated room · sample"
+    if len(rows) > 1:
+        label = "Joint most used rooms" if is_use else "Joint highest rated rooms · sample"
+    if rows.empty:
+        html(f'<article class="brief-leader"><div class="brief-label">{label}</div><h3>More evidence needed</h3><p>Usage needs 70% coverage and 2 observed hours. Ratings need at least 5 responses.</p></article>')
+        return
+    row = rows.iloc[0]
+    names = " / ".join(p.room_label(n) for n in rows["Room Name"])
+    score = f"{row['Utilisation %']:.1f}%" if is_use else f"{row.Sentiment:.2f}<small>/5</small>"
+    width = row["Utilisation %"] if is_use else row.Sentiment * 20
+    detail = (f"{row['Occupied hours']:.1f} occupied hours · {row['Coverage %']:.0f}% coverage" if is_use
+              else f"{row.Responses} invented responses · {row.Positive:.0f}% positive")
+    if len(rows) > 1:
+        detail = f"{len(rows)} rooms tied at the displayed precision · details on hover"
+    source = "Observed time in use" if is_use else "Synthetic space-experience ratings"
+    html(f'<article class="brief-leader {"use" if is_use else "rating"}"><div class="brief-label">{label}</div>'
+         f'<div class="brief-leader-main"><h3>{escape(names)}</h3><strong>{score}</strong></div>'
+         f'<div class="brief-track"><i style="width:{width:.2f}%"></i></div>'
+         f'<p>{escape(detail)}</p><span>{source}</span></article>')
+
+
 def summary(ctx, case):
-    improvements = x.improvement_summary(ctx)
-    title, detail, tone = x.conclusion(ctx, improvements)
-    takeaway(title, detail, tone == "sunrise")
-    feedback = feedback_summary(c.feedback_in_scope(ctx))
-    ranking, leader = x.room_type_ranking(ctx), x.leading_room(ctx)
-    tops = x.leaders(ranking)
-    top = tops.iloc[0] if len(tops) else None
-    fit = improvements["counts"]["fit"]
-    source = "Sample feedback · invented" if feedback["responses"] else "No samples in this scope"
+    controls, audience_col = st.columns([1.25, 1], vertical_alignment="center")
+    with controls:
+        view = st.segmented_control("Estate view", ["Current state", "Improvement choices"], required=True,
+            label_visibility="collapsed", **u.field_state("brief_estate_view", "Current state"))
+    with audience_col:
+        audience = st.selectbox("Sentiment audience", ["Everyone", *AUDIENCES],
+            **u.field_state("feedback_audience", "Everyone"))
+    records = c.feedback_in_scope(ctx, audience=audience)
+    portfolio = p.room_portfolio(ctx, records)
+    feedback = feedback_summary(records)
+    candidates = p.opportunity_rows(portfolio)
+    telemetry = "Sample telemetry" if ctx["demo"] else "Pulse observations"
     metrics([
-        ("Room-fit improvements", str(fit), "Rooms to review against peak demand", "Sample telemetry" if ctx["demo"] else "Pulse observations", "forest", False),
-        ("User sentiment", u.fmt(feedback["experience"], "/5", 2), f"{feedback['responses']:,} sample responses", source, "purple", False),
-        ("Most-used room size" if len(ranking) != 1 else "Only qualifying room size",
-         "Joint leaders" if len(tops) > 1 else top["Room type"].split(" · ")[0] if top is not None else "Unassessed",
-         f"{top['Time in use %']:.1f}% of observed time in use" if top is not None else "More evidence needed", "Capacity bands · observed use", "rain", True),
-        ("Annual net saving" if case else "Savings available", money(case["annual_net"], case["currency"]) if case else "To quantify",
-         (case["room"] if case else "Start with one costed pilot"),
-         "Illustrative assumptions" if case and case["example"] else "Entered assumptions" if case else "Cost inputs needed", "sunrise", not bool(case)),
+        ("Estate time in use", u.fmt(ctx["summary"]["utilisation"], "%", 1), "Occupied / valid observed hours", telemetry, "forest", False),
+        ("Positive space ratings", u.fmt(feedback["positive"], "%", 1), f"{feedback['responses']:,} responses · {audience}", "Invented sample feedback · ratings 4–5", "purple", False),
+        ("Rooms to review", str(len(candidates)), f"{int(portfolio.Controls.sum())} controls · {int(portfolio.Layout.sum())} layout reviews", "Review signals · routes can overlap", "rain", False),
+        ("Annual net saving" if case else "Savings opportunity", money(case["annual_net"], case["currency"]) if case else "To quantify",
+         case["room"] if case else "Scope and cost one pilot",
+         "Illustrative assumptions" if case and case["example"] else "Entered assumptions" if case else "No measured cost or energy saving", "sunrise", not bool(case)),
     ])
-    left, right = st.columns([1, 1], gap="medium")
-    with left, st.container(key="brief_panel_demand"):
-        heading("Learn from the spaces people use", "Time in use · capacity bands, not room-purpose categories")
-        if ranking.empty:
-            st.info("No room types pass the observation checks in this scope.")
+    if view == "Improvement choices":
+        improvement_choices(ctx, portfolio)
+    else:
+        left, right = st.columns([1.9, 1], gap="medium")
+        with left, st.container(key="brief_panel_portfolio"):
+            heading("Room use meets room experience", "Each bubble is a room · size reflects capacity · colour shows the review route")
+            plotted = p.comparison_rows(portfolio)
+            if plotted.empty:
+                st.info("No room has both enough occupancy evidence and five sample responses in this scope. The separate leaders can still be assessed independently.")
+            else:
+                fig = p.performance_figure(portfolio, ctx["summary"]["utilisation"], u.FONT)
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="brief_portfolio_plot")
+                html(f'<div class="brief-small">Showing {len(plotted)} of {len(portfolio)} rooms · rating detail: {fig.layout.meta["rating_axis_floor"]:g}–5 of 5. Dotted lines: estate use and a 4/5 rating. Sentiment is invented.</div>')
+        with right:
+            leader_card(portfolio, "usage")
+            leader_card(portfolio, "sentiment")
+            conclusion, _, _ = x.conclusion(ctx, x.improvement_summary(ctx))
+            html(f'<div class="brief-insight"><b>The next decision</b>{escape(conclusion)} Open Improvement choices to see the rooms and intervention options.</div>')
+    with st.sidebar.expander("How to read the room picture"):
+        st.write("Usage leaders need positive capacity, at least 70% occupancy coverage and two observed hours. The estate percentage pools all valid observed hours. Missing time is unknown, not empty.")
+        st.write("Sample sentiment leaders need at least five responses and are independent of telemetry coverage. Usage ties use one decimal place; sentiment ties use two. An audience filter changes ratings, never usage or improvement signals.")
+        st.write("The map only includes rooms passing both checks. Bubble sizes reflect recorded capacity; colour shows a possible review route. Reference lines are guides, not performance targets. Short periods and sample ratings cannot establish the best room design.")
+        st.write("Controls reviews flag warm or lit empty-room observations. Layout reviews flag rooms with two occupied hours and a 90th-percentile group no larger than half their capacity. Both routes require validation before action.")
+        st.dataframe(portfolio[["Room key", "Utilisation %", "Coverage %", "Responses", "Sentiment", "Route"]], hide_index=True, width="stretch")
+
+
+def improvement_choices(ctx, portfolio):
+    candidates = p.opportunity_rows(portfolio)
+    left, right = st.columns([1, 1.35], gap="medium")
+    with left, st.container(key="brief_panel_matrix"):
+        heading("Where could a change help?", "Coloured cells show a review signal. A room can have both routes.")
+        if candidates.empty:
+            st.info("No qualifying controls or layout signals in this scope. Monitor use and collect real feedback before proposing a change.")
         else:
-            html(''.join(f'<div class="brief-rank"><span>{escape(r["Room type"])}</span><div class="brief-track"><i class="{"lead" if i == 0 else ""}" style="width:{r["Time in use %"]:.3f}%"></i></div><strong>{r["Time in use %"]:.1f}%</strong></div>' for i, r in ranking.iterrows()))
-        if leader:
-            names = " + ".join(leader["equipment"]["video"]) or "Equipment model unconfirmed"
-            html(f'<div class="brief-device"><b>{escape(leader["Room Name"])} · {escape(names)}</b>'
-                 f'{leader["Utilisation %"]:.1f}% time in use · current equipment in {"a joint-leading" if leader["joint"] else "the leading"} room. Device use and quality are not measured.</div>')
-        with st.sidebar.expander("Ranking evidence"):
-            st.write("Each included room has positive capacity, at least 70% occupancy coverage and two observed hours. Group scores pool hours. A single category has no comparison winner; ties are retained at one decimal place.")
-            st.caption("Room purpose, bookings and equipment may differ. Equipment is the inventory snapshot at the selected end, not a historical installation record.")
-            st.dataframe(ranking, hide_index=True, width="stretch")
-    with right, st.container(key="brief_panel_priorities"):
-        heading("Three changes worth testing")
-        counts = improvements["counts"]
-        limited = improvements["limited"]
-        first = (f"Review {fit} room-fit candidate{'s' if fit != 1 else ''}", "Workplace · test a smaller-room option against peaks and purpose.") if fit else ("Build a representative demand baseline", "Workplace · review peak attendance, purpose and booking demand.")
-        second = ("Investigate how empty rooms are run", f"Facilities · {counts['warm']} temperature and {counts['light']} lighting reviews; counts can overlap.") if counts['warm'] or counts['light'] else ("Protect comfort and readiness", "Facilities + IT · review room conditions and reporting gaps.")
-        if limited:
-            first = (first[0], first[1] + f" Restore coverage in {limited} excluded room(s).")
-        steps([first, second, ("Listen before and after the change", "People + IT · collect real employee and guest feedback; remove the recurring friction.")])
-        html('<div class="brief-small"><b>Decision to take:</b> approve one pilot with an owner, budget and review date.</div>')
+            st.plotly_chart(p.opportunity_figure(portfolio, u.FONT), width="stretch", config={"displayModeBar": False}, key="brief_opportunity_plot")
+        limited = int(portfolio["Coverage %"].fillna(0).lt(70).sum())
+        html(f'<div class="brief-small">{limited} room(s) below 70% coverage excluded from recommendations. No flag means no qualifying signal in this period.</div>')
+    with right, st.container(key="brief_panel_routes"):
+        heading("Choose the right intervention")
+        if candidates.empty:
+            steps([("Strengthen the baseline", "Confirm reporting, room purpose and a representative period."),
+                   ("Listen in the space", "Collect real employee and guest feedback."),
+                   ("Agree a measurable pilot", "Use, comfort, satisfaction and metered cost before and after.")])
+            return
+        options = candidates["Room key"].tolist()
+        if st.session_state.get("brief_improve_room") not in options:
+            previous = st.session_state.get("selected_room")
+            st.session_state["brief_improve_room"] = previous if previous in options else options[0]
+        room = st.selectbox("Room to improve", options, label_visibility="collapsed",
+                            **u.field_state("brief_improve_room", options[0]))
+        row = candidates.set_index("Room key").loc[room]
+        if row.Controls:
+            signals = []
+            if row.Warm:
+                signals.append(f"{row['Warm hours']:.1f} h warm while empty")
+            if row.Light:
+                signals.append(f"{row['Light hours']:.1f} h lit while empty")
+            signal = " · ".join(signals)
+            route_card("01", "Controls / BMS review", signal,
+                       "Check schedules and room-to-zone controls; trial occupancy-led HVAC or lighting where suitable.",
+                       "Facilities + IT · validate vacancy, bookings, comfort and integration. Meter the result.", "controls")
+            if st.button("Explore the controls pilot", key="brief_to_controls", width="stretch"):
+                st.session_state["selected_room"] = room
+                st.session_state["brief_condition"] = "warm" if row.Warm else "light"
+                st.switch_page("pages/Environment.py")
+        else:
+            html('<div class="brief-small"><b>Controls:</b> no qualifying vacancy-condition signal in this period.</div>')
+        if row.Layout:
+            seats = max(1, int(row.Capacity / 2))
+            evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
+            replay = evaluate_layout(evidence, [seats])
+            route_card("02", "Room configuration review",
+                       f"90% of occupied time: {u.fmt(row['P90 attendance'])} people or fewer / {u.fmt(row.Capacity)} seats",
+                       f"Test a {seats}-seat option: it fits {u.fmt(replay['fit_percent'], '%', 1)} of observed occupied time.",
+                       f"Workplace + IT · observed peak {u.fmt(evidence['peak'])}. Validate demand, purpose, acoustics and accessibility.", "layout")
+            if st.button("Compare room layouts", key="brief_to_layout", width="stretch"):
+                st.session_state["selected_room"] = room
+                st.session_state["brief_space_view"] = "Layout options"
+                st.switch_page("pages/Spaces.py")
+        else:
+            html('<div class="brief-small"><b>Layout:</b> no qualifying capacity-fit signal in this period.</div>')
+        with st.popover("What needs validating?", icon=":material/info:", width="stretch"):
+            st.write("A BMS link may be an operational change, but it is not automatically simple: existing controls, room-to-zone mapping, permissions, schedules and comfort constraints determine feasibility. Warm or lit does not by itself prove wasted energy.")
+            st.write("Reconfiguration is a design and investment decision. Test booking demand, peak groups, room purpose, dimensions, accessibility, acoustics and AV before costing partitions or changing capacity. A second room's future use cannot be inferred from this feed.")
+            st.write("Where both routes apply, assess controls feasibility and room purpose first. Use a reversible pilot where appropriate, then decide whether a capital project is justified. Set an owner, budget, baseline and review date.")
+            st.caption("The two condition-hour values can overlap. Review routes use telemetry; invented sentiment is not evidence for a building change or financial saving.")
+
+
+def route_card(number, title, evidence, action, validation, kind):
+    html(f'<article class="brief-route {kind}"><div class="brief-route-title"><span>{number}</span><b>{escape(title)}</b></div>'
+         f'<strong>{escape(evidence)}</strong><p>{escape(action)}</p><small>{escape(validation)}</small></article>')
 
 
 def space(ctx, case):
@@ -162,6 +253,11 @@ def space(ctx, case):
             seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(model_key, default))
             st.caption("Replays observed groups in one proposed room. It does not predict demand, extra meetings or financial savings.")
     layout = evaluate_layout(evidence, [seats])
+    view = st.segmented_control("Room view", ["Performance", "Layout options"], required=True,
+        label_visibility="collapsed", **u.field_state("brief_space_view", "Performance"))
+    if view == "Layout options":
+        layout_options(r, evidence, room_capacity, seats, layout)
+        return
     title, detail, tone = c.room_story(r)
     takeaway(title, detail, tone == "sunrise")
     left, right = st.columns([1, 1.1], gap="medium")
@@ -194,6 +290,34 @@ def space(ctx, case):
             st.caption("A capacity match does not control for purpose or equipment. Short periods and poor coverage may not represent demand. Empty and unknown time are excluded from the replay.")
             st.page_link("pages/Scenarios.py", label="Explore room alternatives", icon=":material/compare_arrows:")
     html('<div class="brief-small"><b>Suggested improvement:</b> trial the room size people need, while preserving access to larger rooms for peak demand.</div>')
+
+
+def layout_options(row, evidence, capacity, seats, layout):
+    if not capacity:
+        st.info("Confirm a positive whole-number room capacity before comparing layouts.")
+        return
+    heading(f"{row['Room Name']} · test the space around the group", "Same observed attendance, replayed in the current room and one proposed option")
+    columns = st.columns(2, gap="medium")
+    current = evaluate_layout(evidence, [capacity])
+    for column, label, count, result, key in zip(columns, ["Current room", "Smaller-room option"],
+            [capacity, seats], [current, layout], ["current", "proposed"]):
+        with column, st.container(key="brief_panel_layout_" + key):
+            heading(f"{label} · {count} seats")
+            if evidence["typical"] is not None:
+                svg = v.room_capacity_svg(evidence["typical"], count).replace(v.BLUE, "#5F259F").replace("Blue represents", "Purple represents")
+                st.image(svg, width=310)
+            fit = result["fit_percent"]
+            html(f'<div class="brief-layout-score"><strong>{u.fmt(fit, "%", 1)}</strong><span>of observed occupied time fits</span></div>'
+                 f'<div class="brief-track"><i class="lead" style="width:{fit or 0:.2f}%"></i></div>'
+                 f'<div class="brief-small">{u.fmt(result["exceeds_hours"], " h", 1)} exceeds this capacity · typical group {u.fmt(evidence["typical"], digits=1)}</div>')
+    if evidence["coverage"] is None or evidence["coverage"] < 70:
+        st.warning("Limited occupancy coverage: this replay is exploratory. Restore reporting before recommending a layout change.")
+    html(f'<div class="brief-insight"><b>Decision gate · observed peak {u.fmt(evidence["peak"])} people</b>'
+         'Check peak bookings, purpose, acoustics, accessibility and AV. A smaller footprint may release space; its future use and financial return still need a business case.</div>')
+    with st.popover("Alternatives and replay assumptions", icon=":material/compare_arrows:", width="stretch"):
+        st.write("Keep the current layout, trial furniture changes, or assess a split-room design. Each requires its own capacity, design and cost assessment. This replay treats each observed count as one group and excludes empty, missing and offline time.")
+        st.caption("A second room's demand and simultaneous meetings are unknown. No additional meetings or savings are predicted.")
+        st.page_link("pages/Scenarios.py", label="Model one or two rooms", icon=":material/meeting_room:")
 
 
 def close_survey():

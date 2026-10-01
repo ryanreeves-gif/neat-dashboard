@@ -46,10 +46,10 @@ def shell(active, title, subtitle, briefing=False):
             ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
         if presentation:
             st.html('<div class="nav-group">THE TEN-MINUTE STORY</div>')
-            for path, label, icon in [("app.py", "01 · The conclusion", "dashboard"),
-                                      ("pages/Spaces.py", "02 · The right space", "meeting_room"),
-                                      ("pages/Feedback.py", "03 · The experience", "sentiment_satisfied"),
-                                      ("pages/Environment.py", "04 · The next move", "bolt")]:
+            for path, label, icon in [("app.py", "01 · Current state", "dashboard"),
+                                      ("pages/Spaces.py", "02 · Room fit", "meeting_room"),
+                                      ("pages/Feedback.py", "03 · Experience", "sentiment_satisfied"),
+                                      ("pages/Environment.py", "04 · Improve", "bolt")]:
                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
             with st.expander("Explore the full analysis"):
                 for _, links in groups:
@@ -60,9 +60,9 @@ def shell(active, title, subtitle, briefing=False):
                 st.caption("Switch Presentation view off for the detailed version of every chapter.")
             with st.popover("Presenter guide", icon=":material/co_present:", width="stretch"):
                 st.markdown("**A ten-minute story**")
-                st.write("**0:00–2:00 · The conclusion.** What makes the workplace worth the commute? Lead with one improvement decision, supported by use, experience and an investment case.")
-                st.write("**2:00–4:30 · The right space.** Use one room, its automatic peer and a smaller-room replay. Ask what the room is for before changing its size.")
-                st.write("**4:30–7:00 · The experience.** Contrast employees and guests, then demonstrate a few taps on the portrait survey.")
+                st.write("**0:00–3:00 · The current state.** Show the room map and the separate usage and sentiment leaders. Open Improvement choices: which rooms need a controls review, a layout review, or both?")
+                st.write("**3:00–5:00 · The right space.** Use one room, its automatic peer and the visual layout comparison. Ask what the room is for before changing its size.")
+                st.write("**5:00–7:00 · The experience.** Contrast employees and guests, then demonstrate a few taps on the portrait survey.")
                 st.write("**7:00–10:00 · The next move.** Play the simulated Pulse → ServiceNow → BMS workflow. Close on one pilot, an owner and a review date.")
                 st.caption("Pulse supplies observations. Feedback is synthetic, financial values are assumptions and building controls are simulated. None measures whether a commute is worthwhile by itself.")
         else:

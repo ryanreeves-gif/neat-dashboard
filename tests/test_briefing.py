@@ -85,3 +85,33 @@ def test_feedback_audience_and_survey_dialog_remain_usable():
     at.button(key="frame_next").click().run()
     assert not at.exception
     assert all(g.value is None for g in at.get("button_group")[1:])
+
+
+def test_visual_estate_routes_keep_room_context_and_layout_replay_is_interactive():
+    at = presentation()
+    assert not at.exception
+    assert at.get("plotly_chart")
+    at.selectbox(key="_feedback_audience").select("Neat employee").run()
+    assert at.session_state["feedback_audience"] == "Neat employee"
+    at.get("button_group")[0].set_value("Improvement choices").run()
+    assert not at.exception, [e.message for e in at.exception]
+    room = at.selectbox(key="_brief_improve_room").value
+    assert at.button(key="brief_to_layout")
+    at.button(key="brief_to_layout").click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert at.selectbox(key="_selected_room").value == room
+    assert at.session_state["brief_space_view"] == "Layout options"
+    assert len(at.get("image")) == 2
+    # AppTest follows switch_page for this run but needs the target file bound
+    # explicitly for subsequent widget reruns (the browser retains the page).
+    at.switch_page("pages/Spaces.py").run()
+    seats = at.number_input[0]
+    seats.set_value(1).run()
+    assert not at.exception
+    assert any("Smaller-room option · 1 seats" in e.proto.body for e in at.get("html"))
+    at.switch_page("app.py").run()
+    assert at.session_state["feedback_audience"] == "Neat employee"
+    assert at.selectbox(key="_brief_improve_room").value == room
+    at.button(key="brief_to_controls").click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert at.selectbox(key="_selected_room").value == room
