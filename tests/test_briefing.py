@@ -61,14 +61,14 @@ def test_low_coverage_cannot_authorise_a_presentation_control_demo():
     assert json.loads(json.dumps(config))["command_sent"] is False
 
 
-def test_feedback_audience_and_survey_dialog_remain_usable():
+def test_companion_is_ready_on_entry_and_test_submission_stays_separate():
     at = presentation().switch_page("pages/Feedback.py").run()
+    assert any(b.label == "Share feedback" for b in at.button)
+    assert not any(b.label == "Try the portrait survey" for b in at.button)
     at.get("button_group")[0].set_value("Customer / guest").run()
     assert not at.exception
     assert at.session_state["feedback_audience"] == "Customer / guest"
-    at.button(key="brief_try_survey").click().run()
-    assert not at.exception, [e.message for e in at.exception]
-    assert any(b.label == "Share feedback" for b in at.button)
+    sample_cards = next(e.proto.body for e in at.get("html") if 'brief-metrics stacked' in e.proto.body)
     next(b for b in at.button if b.label == "Share feedback").click().run()
     assert not at.exception
     assert any("rate both" in w.value for w in at.warning)
@@ -81,10 +81,16 @@ def test_feedback_audience_and_survey_dialog_remain_usable():
     assert not at.exception, [e.message for e in at.exception]
     assert len(at.session_state["feedback_tryouts"]) == 1
     assert at.session_state["feedback_tryouts"][0]["source"] == "Interactive demonstration"
-    assert at.session_state["brief_survey_open"] is True
+    assert any("Your latest test" in e.proto.body for e in at.get("html"))
+    assert next(e.proto.body for e in at.get("html") if 'brief-metrics stacked' in e.proto.body) == sample_cards
     at.button(key="frame_next").click().run()
     assert not at.exception
     assert all(g.value is None for g in at.get("button_group")[1:])
+    assert len(at.session_state["feedback_tryouts"]) == 1
+    options = at.selectbox(key="_selected_room").options
+    at.selectbox(key="_selected_room").select(options[-1]).run()
+    assert not at.exception
+    assert any(b.label == "Share feedback" for b in at.button)
 
 
 def test_visual_estate_routes_keep_room_context_and_layout_replay_is_interactive():

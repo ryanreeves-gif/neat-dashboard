@@ -62,6 +62,45 @@ def room_label(name):
     return str(name).split(" (")[0]
 
 
+def chart_labels(rows, y_floor):
+    """Place labels globally so neighbouring rooms from different routes do not collide.
+
+    Plotly keeps the pixel offsets on resize; full identities remain in hover.
+    Dense estates prioritise higher ratings, then higher use; other names remain on hover.
+    """
+    width, height = 550, 210
+    ordered = rows.sort_values(["Sentiment", "Utilisation %"], ascending=False)
+    points = [(float(r["Utilisation %"]) * width / 100,
+               (5.18 - float(r.Sentiment)) * height / (5.18 - y_floor)) for _, r in ordered.iterrows()]
+    boxes, annotations = [], []
+    for (_, row), (px, py) in zip(ordered.iterrows(), points):
+        label = room_label(row["Room Name"])
+        if len(label) > 20:
+            label = label[:18] + "…"
+        length = max(28, len(label) * 5.5)
+        choices = []
+        for dy in [-24, 24, -40, 40, -56, 56]:
+            for dx, anchor in [(0, "center"), (20, "left"), (-20, "right")]:
+                cx = px + dx + (length / 2 if anchor == "left" else -length / 2 if anchor == "right" else 0)
+                cy = py + dy
+                box = (cx - length / 2 - 3, cy - 9, cx + length / 2 + 3, cy + 9)
+                overlaps = sum(box[0] < b[2] and box[2] > b[0] and box[1] < b[3] and box[3] > b[1] for b in boxes)
+                dots = sum(box[0] - 9 < x < box[2] + 9 and box[1] - 9 < y < box[3] + 9 for x, y in points)
+                overflow = max(0, -box[0]) + max(0, box[2] - width) + max(0, -box[1]) + max(0, box[3] - height)
+                choices.append((overlaps * 1000 + dots * 400 + overflow * 20 + abs(dy) + abs(dx) / 5,
+                                box, dx, dy, anchor))
+        _, box, dx, dy, anchor = min(choices, key=lambda item: item[0])
+        # Too many labels is less readable than hover; never cover another label.
+        if any(box[0] < b[2] and box[2] > b[0] and box[1] < b[3] and box[3] > b[1] for b in boxes):
+            continue
+        boxes.append(box)
+        annotations.append(dict(x=float(row["Utilisation %"]), y=float(row.Sentiment), text=escape(label),
+            ax=dx, ay=dy, xanchor=anchor, showarrow=True, arrowhead=0, arrowwidth=.65,
+            arrowcolor="#C8D0D3", standoff=10, font=dict(size=10, color="#33353C"),
+            bgcolor="rgba(255,255,255,.8)", borderpad=2))
+    return annotations
+
+
 def performance_figure(portfolio, estate_utilisation, font):
     plotted = comparison_rows(portfolio)
     fig = go.Figure()
@@ -76,12 +115,9 @@ def performance_figure(portfolio, estate_utilisation, font):
         group = plotted[plotted.Route.eq(route)].sort_values("Utilisation %")
         if group.empty:
             continue
-        positions = ["top right" if value < 15 else "top left" if value > 80 else ("bottom center" if i % 2 else "top center")
-                     for i, value in enumerate(group["Utilisation %"])]
         custom = [[escape(str(r["Room key"])), int(r.Responses), float(r["Coverage %"]), float(r.Capacity), escape(route)] for _, r in group.iterrows()]
         fig.add_trace(go.Scatter(x=group["Utilisation %"], y=group.Sentiment, name=route,
-            mode="markers+text", text=[escape(room_label(n)) for n in group["Room Name"]], textposition=positions,
-            textfont=dict(size=11, color="#33353C"), marker=dict(size=12 + 4 * np.sqrt(group.Capacity.clip(upper=36)),
+            mode="markers", marker=dict(size=12 + 4 * np.sqrt(group.Capacity.clip(upper=36)),
             color=colour, opacity=.88, line=dict(color="white", width=2)), customdata=custom,
             hovertemplate="<b>%{customdata[0]}</b><br>Observed time in use: %{x:.1f}%<br>Sample space rating: %{y:.2f}/5<br>%{customdata[1]} invented responses<br>%{customdata[2]:.0f}% occupancy coverage · %{customdata[3]:g} seats<br>%{customdata[4]}<extra></extra>"))
     fig.update_layout(template="plotly_white", height=310, margin=dict(l=42, r=22, t=16, b=48),
@@ -91,6 +127,7 @@ def performance_figure(portfolio, estate_utilisation, font):
     fig.update_yaxes(range=[y_floor, 5.18], title="Sample space rating / 5", dtick=.5 if y_floor >= 3 else 1, gridcolor="#ECEFF0", zeroline=False)
     fig.update_layout(meta={"rooms": plotted["Room key"].tolist(), "rating_axis_floor": y_floor,
                             "use_reference": split, "sentiment_is_synthetic": True})
+    fig.update_layout(annotations=chart_labels(plotted, y_floor))
     return fig
 
 

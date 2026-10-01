@@ -42,14 +42,14 @@ def takeaway(title, detail, caution=False):
     html(f'<section class="brief-takeaway {"caution" if caution else ""}"><h2>{escape(title)}</h2><p>{escape(detail)}</p></section>')
 
 
-def metrics(items):
+def metrics(items, stacked=False):
     """label, value, detail, source, colour, textual value."""
     cards = []
     for label, value, detail, source, colour, words in items:
         cards.append(f'<article class="brief-metric {colour}"><div class="brief-label">{escape(label)}</div>'
                      f'<div class="brief-number {"words" if words else ""}">{escape(str(value))}</div>'
                      f'<div class="brief-detail">{escape(detail)}</div><div class="brief-source {"assumption" if colour == "sunrise" else ""}">{escape(source)}</div></article>')
-    html('<div class="brief-metrics">' + ''.join(cards) + '</div>')
+    html(f'<div class="brief-metrics {"stacked" if stacked else ""}">' + ''.join(cards) + '</div>')
 
 
 def heading(title, subtitle=""):
@@ -322,31 +322,23 @@ def layout_options(row, evidence, capacity, seats, layout):
         st.page_link("pages/Scenarios.py", label="Model one or two rooms", icon=":material/meeting_room:")
 
 
-def close_survey():
-    st.session_state["brief_survey_open"] = False
-
-
-@st.dialog("Try the Neat Frame survey", width="small", on_dismiss=close_survey)
-def survey_dialog(room):
+def experience(ctx, case):
     from workplace.feedback_view import styles, portrait_survey
     styles()
-    portrait_survey(room)
-
-
-def experience(ctx, case):
-    audience = st.segmented_control("Feedback audience", ["Everyone", *AUDIENCES], required=True, width="stretch",
-                                    label_visibility="collapsed", **u.field_state("feedback_audience", "Everyone"))
     all_records = c.feedback_in_scope(ctx)
-    records = all_records if audience == "Everyone" else all_records[all_records.audience.eq(audience)]
-    s = feedback_summary(records)
-    html('<div class="brief-demo-banner"><b>Sample sentiment:</b> invented responses, matched to the selected rooms and dates. Employees and guests are shown separately.</div>')
-    metrics([
-        ("Space experience", u.fmt(s["experience"], "/5", 2), "How the space feels", "Sample responses", "purple", False),
-        ("Equipment experience", u.fmt(s["equipment"], "/5", 2), "How the technology feels", "Sample responses", "purple", False),
-        ("Positive space ratings", u.fmt(s["positive"], "%", 1), "Ratings of 4 or 5", "Sample responses", "forest", False),
-        ("Responses in this view", f"{s['responses']:,}", audience, "Synthetic · not live feedback", "rain", False),
-    ])
-    left, right = st.columns([1, 1.05], gap="medium")
+    left, right = st.columns([1.35, 1], gap="large")
+    with left:
+        audience = st.segmented_control("Feedback audience", ["Everyone", *AUDIENCES], required=True, width="stretch",
+                                        label_visibility="collapsed", **u.field_state("feedback_audience", "Everyone"))
+        records = all_records if audience == "Everyone" else all_records[all_records.audience.eq(audience)]
+        s = feedback_summary(records)
+        html('<div class="brief-demo-banner"><b>Sample results:</b> invented responses aligned to the selected rooms and dates. Test submissions appear separately below.</div>')
+        metrics([
+            ("Space experience", u.fmt(s["experience"], "/5", 2), "How the space feels", "Sample responses", "purple", False),
+            ("Equipment experience", u.fmt(s["equipment"], "/5", 2), "How the technology feels", "Sample responses", "purple", False),
+            ("Positive space ratings", u.fmt(s["positive"], "%", 1), "Ratings of 4 or 5", "Sample responses", "forest", False),
+            ("Responses in this view", f"{s['responses']:,}", audience, "Synthetic · not live feedback", "rain", False),
+        ], stacked=True)
     with left, st.container(key="brief_panel_sentiment"):
         heading("Keep the two experiences visible")
         for group, label in zip(AUDIENCES, ["Neat employees", "Customers / guests"]):
@@ -362,15 +354,23 @@ def experience(ctx, case):
         html('<div class="brief-small">Green: positive (4–5) · Gold: neutral (3) · Walnut: needs attention (1–2)</div>')
         issues = records.loc[records.issue.ne(""), "issue"].value_counts()
         focus = f"Most frequent sample issue: {issues.index[0]} ({issues.iloc[0]} responses)." if len(issues) else "No issues flagged in this sample selection."
-        html(f'<div class="brief-device"><b>Turn feedback into a short improvement list.</b>{escape(focus)} Use a live survey before and after the pilot.</div>')
-    with right, st.container(key="brief_panel_frame"):
-        html('<div class="brief-frame-layout"><div class="brief-frame" aria-label="Portrait survey concept"><div class="frame-camera"></div><b>How was<br>your visit?</b><small>A few taps. A better workplace.</small><div class="frame-audience">Employee &nbsp; / &nbsp; Guest</div><small>THE SPACE</small><div class="frame-faces">☹ ▫ ☺</div><small>THE EQUIPMENT</small><div class="frame-faces">☹ ▫ ☺</div><div class="frame-send">Share feedback</div></div><div class="brief-frame-copy"><strong>Listen at the moment that matters.</strong><p>Portrait survey concept for Neat Frame. Ask about the room, the equipment and one thing to improve.</p><p><b>Next step:</b> a live pilot with a real response store and an owner for follow-up.</p></div></div>')
-        preferred_room(ctx)
-        room = st.session_state["selected_room"]
-        if st.button("Try the portrait survey", key="brief_try_survey", type="primary", width="stretch"):
-            st.session_state["brief_survey_open"] = True
-        if st.session_state.get("brief_survey_open", False):
-            survey_dialog(ctx["inventory"].set_index("Room key", drop=False).loc[room])
+        html(f'<div class="brief-small"><b>{escape(focus)}</b> Validate recurring issues with real feedback before and after a pilot.</div>')
+    with left:
+        options = preferred_room(ctx)
+        room = st.selectbox("Room on the companion app", options, **u.field_state("selected_room", options[0]))
+        latest = st.session_state.get("feedback_tryouts", [])
+        if latest:
+            response = latest[-1]
+            html(f'<div class="brief-test-receipt"><b>Your latest test · {escape(response["room_name"])}</b>'
+                 f'{escape(response["audience"])} · Space {response["experience"]}/5 · Equipment {response["equipment"]}/5'
+                 '<small>Saved in this browser session only · historical sample scores stay separate</small></div>')
+        with st.popover("From prototype to a live pilot", icon=":material/info:", width="stretch"):
+            st.write("The companion is ready to try here. Choose employee or guest, rate the space and equipment, then share feedback. Use Next person to clear the form for the next visitor.")
+            st.write("For deployment, validate the web app on Neat Frame, connect an authenticated response store and agree who follows up on feedback and IT-help requests. Hardware touch behaviour and live integrations have not been tested.")
+            st.page_link("pages/Frame.py", label="Open the full portrait screen", icon=":material/open_in_full:")
+    with right, st.container(key="brief_companion"):
+        html('<div class="brief-companion-label">COMPANION APP · READY TO TRY</div>')
+        portrait_survey(ctx["inventory"].set_index("Room key", drop=False).loc[room], compact=True)
 
 
 def action_signal(ctx, room, kind):

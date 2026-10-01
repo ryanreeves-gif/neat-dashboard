@@ -32,7 +32,7 @@ def start_again():
     st.session_state["frame_round"] = st.session_state.get("frame_round", 0) + 1
 
 
-def portrait_survey(room):
+def portrait_survey(room, compact=False):
     token = sha256(room["Room key"].encode()).hexdigest()[:12] + f"_{st.session_state.get('frame_round', 0)}"
     with st.container(key="frame_screen"):
         logo = base64.b64encode((u.ROOT / "assets/neat-logo.svg").read_bytes()).decode()
@@ -52,8 +52,10 @@ def portrait_survey(room):
                 equipment = st.segmented_control("The equipment", list(FACES), format_func=FACES.get,
                     key="frame_equipment_" + token, required=True, width="stretch")
                 st.html('<div class="frame-scale"><span>1 · Poor</span><span>5 · Excellent</span></div>')
-                issue = st.selectbox("Anything we could improve? (optional)", ["Nothing to flag", *ISSUES], key="frame_issue_" + token)
-                comment = st.text_input("A few words? (optional)", max_chars=300, placeholder="What made the difference?", key="frame_comment_" + token)
+                optional = st.expander("Add a comment or improvement (optional)") if compact else st.container()
+                with optional:
+                    issue = st.selectbox("Anything we could improve? (optional)", ["Nothing to flag", *ISSUES], key="frame_issue_" + token)
+                    comment = st.text_input("A few words? (optional)", max_chars=300, placeholder="What made the difference?", key="frame_comment_" + token)
                 submitted = st.form_submit_button("Share feedback", type="primary", width="stretch")
             if submitted:
                 if audience is None or experience is None or equipment is None:
