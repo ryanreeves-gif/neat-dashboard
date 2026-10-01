@@ -32,7 +32,7 @@ The feed is cached for ten minutes. Sidebar → Data source → Refresh observat
 
 ## Experience
 
-- **Overview:** a plain-language takeaway, occupied/empty/unknown time, demand patterns, sample sentiment and a short decision brief.
+- **Overview:** the executive conclusion: a recommended direction, savings case, room-type demand, equipment in the leading room, employee/guest sample sentiment and priority actions. Supporting utilisation evidence is expandable.
 - **Spaces:** automatic comparison with a similarly sized room, attendance versus capacity, individual histories and downloadable observations.
 - **Scenarios:** current capacity alongside two editable room layouts, optional project costs and a downloadable comparison. Open from the sidebar or Spaces → Compare alternative layouts.
 - **Feedback:** clearly labelled synthetic employee and customer/guest results across the room feed's history, audience/date/room filters, exports and an interactive portrait survey.
@@ -66,6 +66,18 @@ The existing sheet changed from unpadded US dates (e.g. `9/10/2026 11:55:32`, Se
 Capacity uses available metadata within the same location and room name, filling missing entries forwards then backwards. Unknown capacity is never assumed to be four seats. Metadata corrections, renamed rooms and parallel platform aliases require reconciliation in the collector before making estate-wide decisions.
 
 ## Claims and integrations
+
+### Overview conclusions
+
+The conclusion adapts to the selected scope and observation coverage. Improvement counts include only rooms with at least 70% occupancy coverage and use the existing room-fit, warm-empty and bright-empty findings. Counts across themes can overlap; the headline counts distinct rooms.
+
+Room types are inferred size bands: Focus (1–2 seats), Small (3–6), Medium (7–12) and Large (13+). Rankings require positive capacity, at least 70% occupancy coverage and at least two observed hours per included room. The score pools occupied and observed hours, rather than averaging room percentages. Ties at one decimal place are retained; a single eligible category is not called a comparison winner, and zero-use categories do not produce a leader. Highest use is a demand signal, not a quality or ROI score.
+
+The device highlight identifies the current video equipment in the busiest qualifying room, using the inventory snapshot at the selected period end. It does not claim a device-level use, quality or historical installation comparison. Multiple video products remain a mixed setup, controllers are listed separately and unmapped codes are retained without guessed names. Equipment metadata is optional; an unknown model does not cause the app to select a different room. Product-code mappings are sourced from [Neat's model guide](https://support.neat.no/article/neat-device-attributes-for-microsoft-intune-conditional-access-device-exclusions/) and [Microsoft's device list](https://learn.microsoft.com/en-us/microsoftteams/devices/certified-hardware-android).
+
+The savings summary reads complete Value & ROI cases for rooms in the selected scope, within the current browser session. A selector chooses one case; projects and currencies are never added together. Annual net benefit excludes the initial investment, which is shown separately with payback and horizon net benefit. If no case is complete, the result stays unassessed. An optional, clearly labelled illustration shows £18,000 initial investment, £9,000 annual savings and £1,500 extra annual cost: £7,500 annual net benefit, 28.8-month simple payback and £4,500 three-year net benefit. This illustration does not populate or overwrite a customer's cost inputs.
+
+Overview sentiment covers both audiences within the shared room/date/hour filters. It uses the same synthetic records as Feedback, with average space and equipment ratings, 4–5 positive share, response counts and an employee/guest distribution. Synthetic opinions never affect the room-use rankings or financial case.
 
 ### Room-size scenarios
 

@@ -6,7 +6,7 @@ import streamlit as st
 from workplace import ui as u
 
 PURPOSE = {
-    "Overview": "Your next workplace decision",
+    "Overview": "Your executive conclusion",
     "Spaces": "Match your rooms to real demand",
     "Feedback": "Understand the people using your spaces",
     "Environment": "Improve comfort and investigate running costs",

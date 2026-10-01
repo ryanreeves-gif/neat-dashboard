@@ -31,10 +31,9 @@ def test_room_illustration_reaches_native_image_component_with_fractional_seat()
     assert all("<svg" not in element.proto.body for element in at.get("html"))
 
 
-def test_room_images_are_emitted_on_overview_and_spaces():
+def test_room_images_are_emitted_on_the_detailed_spaces_page():
     at = app()
     assert not at.exception
-    assert at.get("image")
     at.switch_page("pages/Spaces.py").run()
     assert not at.exception
     assert at.get("image")

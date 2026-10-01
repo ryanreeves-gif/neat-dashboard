@@ -85,8 +85,8 @@ def report(ctx):
 
 def executive_panel(ctx):
     with st.container(key="panel_decisions"):
-        u.section("Decisions to explore", "focus")
-        st.caption("A short list of evidence-led next steps. Validate the benefit and cost before committing.")
+        u.section("Your next moves", "focus")
+        st.caption("Start with these priorities, then measure the effect on cost, use and real user feedback.")
         actions = decision_actions(ctx)
         columns = st.columns(len(actions), gap="medium")
         for i, (column, action) in enumerate(zip(columns, actions)):
@@ -115,68 +115,8 @@ def executive_panel(ctx):
 
 
 def overview():
-    from workplace.feedback import feedback_summary
-    u.shell("Overview", "Make every space count.", "See how your spaces are used, how the experience could be measured and where to focus your next investment.")
-    v.styles()
-    ctx = u.context()
-    s, previous = ctx["summary"], ctx["previous"]
-    delta = None
-    if s["coverage"] >= 70 and previous["coverage"] >= 70 and pd.notna(previous["utilisation"]):
-        change = round(s['utilisation'] - previous['utilisation'])
-        delta = ("No rounded change" if change == 0 else f"{change:+d} percentage points") + " vs previous period"
-    counts = c.opportunity_counts(ctx)
-    title = (f"Rooms were in use for {s['utilisation']:.0f}% of observed time." if pd.notna(s['utilisation'])
-             else "Build a usable room baseline before investing.")
-    detail = "Check peak demand and room fit before adding space or equipment. Observed empty time is an opportunity to investigate, not a cash saving."
-    if s["coverage"] < 70:
-        detail = "Coverage is limited. Fix observation gaps before treating this period as representative of demand."
-    c.answer("What the selected period tells us", title, detail, "rain", str(s["rooms"]), "rooms in your selected scope")
-    left,right=st.columns([1,1.65],gap="medium")
-    with left,st.container(key="panel_time_mix"):
-        u.section("Where does the time go?", "utilisation", "mix")
-        c.time_mix_chart(s)
-        if delta:st.caption(delta)
-    with right:
-        cols=st.columns(2)
-        with cols[0]:c.stat("Typical attendance",u.fmt(s["attendance"],digits=1),"People while rooms are occupied","forest","Pulse observations")
-        with cols[1]:c.stat("Room-fit opportunities",str(counts["fit"]),"Rooms meeting the fit review rules","rain","Pulse observations")
-        st.write("")
-        sentiment=feedback_summary(c.feedback_in_scope(ctx))
-        with st.container(key="panel_overview_sentiment"):
-            st.html('<span class="source-tag sample">Sample sentiment · invented responses</span>')
-            st.markdown(f"**{u.fmt(sentiment['positive'], '%', 1)} positive space ratings** · {sentiment['responses']:,} sample responses")
-            st.caption("The future value: combine observed use with real employee and guest feedback before and after a change.")
-            st.page_link("pages/Feedback.py",label="Explore the experience",icon=":material/arrow_forward:")
-        st.page_link("pages/Value.py",label="Build a cost and ROI model",icon=":material/finance_mode:")
-    st.write("")
-    left, right = st.columns([1.55, 1], gap="medium")
-    with left, st.container(key="panel_heatmap"):
-        u.section("When are rooms busiest?", "heatmap")
-        days, bands, z, observed = a.heatmap(ctx["samples"], ctx["office"])
-        labels = np.array([["\u2014" if np.isnan(v) else f"{v:.0f}%" for v in row] for row in z])
-        fig = go.Figure(go.Heatmap(x=days, y=bands, z=z, customdata=observed, text=labels,
-            texttemplate="%{text}", textfont={"size": 14}, colorscale=[[0, "#F0F3F8"], [.5, "#B9C9EC"], [1, u.BLUE]],
-            zmin=0, zmax=100, showscale=False, xgap=7, ygap=7, hoverongaps=False,
-            hovertemplate="%{x} \xb7 %{y}<br>%{z:.1f}% of observed time in use<br>%{customdata:.1f} observed room-hours<extra></extra>"))
-        u.plot_style(fig, 238)
-        fig.update_yaxes(autorange="reversed", showgrid=False)
-        chart(fig, "demand_heatmap")
-        st.caption("Light \u2192 dark: 0\u2013100% of observed time in use \xb7 gaps: no valid observations. Seat capacity used is shown in Spaces.")
-    with right, st.container(key="panel_fit"):
-        u.section("Does the room fit?", "fit")
-        fit = ctx["issues"].query("Kind == 'fit'")
-        candidates = ctx["stats"].query("Capacity > 0 and `Occupied hours` > 0")
-        if candidates.empty:
-            st.write("More occupied observations and room capacity metadata are needed.")
-        else:
-            r = candidates[candidates["Room key"] == fit.iloc[0]["Room key"]].iloc[0] if not fit.empty else candidates.sort_values("Occupied hours", ascending=False).iloc[0]
-            st.write(f"**{r['Room Name']}**")
-            st.caption(r.Location)
-            v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
-            if st.button("Explore this room", key="fit_room", type="primary"):
-                u.go_room(r["Room key"])
-    executive_panel(ctx)
-    u.footer()
+    from workplace.overview_view import render
+    render(executive_panel)
 
 
 def room_trend(ctx, room_key, signal, key):
