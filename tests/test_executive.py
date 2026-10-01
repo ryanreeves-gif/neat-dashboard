@@ -98,6 +98,7 @@ def test_app_export_follows_room_filter(monkeypatch):
     monkeypatch.setattr(views, "pdf_brief", capture)
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=45)
     app.session_state["demo_mode"] = True
+    app.session_state["presentation_mode"] = False
     app.run()
     assert not app.exception
     options = app.multiselect(key="_room_filter").options

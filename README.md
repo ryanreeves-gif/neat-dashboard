@@ -32,6 +32,21 @@ The feed is cached for ten minutes. Sidebar → Data source → Refresh observat
 
 ## Experience
 
+The app opens in **Presentation view**, a compact four-chapter executive briefing. Switch it off in the sidebar for the complete dashboard. Scope, data-quality detail, calculation notes and savings assumptions remain available in sidebar expanders or popovers, rather than taking space from the main visual story. The layout targets a laptop/monitor canvas; narrower screens stack cards without clipping information.
+
+| Webinar timing | Chapter | Decision and demonstration |
+| --- | --- | --- |
+| 0:00–2:00 | The conclusion | Earn the commute: which room-fit, experience and cost improvements deserve a pilot? |
+| 2:00–4:30 | The right space | One room, its automatically matched capacity peer, and a replay against a proposed smaller room. |
+| 4:30–7:00 | The experience | Separate employee and guest sentiment, then try the portrait survey in a dialog. |
+| 7:00–10:00 | The next move | Replay an explicitly simulated Pulse → ServiceNow → BMS workflow. Close on an owner, budget and review date. |
+
+The sidebar's Presenter guide contains these cues. Each chapter has a next link. Use one room through the story, and retain deeper pages for questions. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
+
+The compact workflow reuses the coverage-screened findings. It is disabled where no qualifying finding supports the selected room and condition. Simulation results are tied to room, dates, hours, thresholds and evidence; changing that configuration removes the displayed result. No command is sent, no ServiceNow ticket is created and no saving is measured. The financial example is opt-in and independent of this control simulation.
+
+The full dashboard remains available:
+
 - **Overview:** the executive conclusion: a recommended direction, savings case, room-type demand, equipment in the leading room, employee/guest sample sentiment and priority actions. Supporting utilisation evidence is expandable.
 - **Spaces:** automatic comparison with a similarly sized room, attendance versus capacity, individual histories and downloadable observations.
 - **Scenarios:** current capacity alongside two editable room layouts, optional project costs and a downloadable comparison. Open from the sidebar or Spaces → Compare alternative layouts.
@@ -102,7 +117,7 @@ The model is undiscounted and omits tax, inflation, residual value and staged sa
 
 ### Customer story and visual system
 
-The navigation follows Understand → Improve → Operate. Every page has a stated customer purpose, a leading answer or decision, graphical evidence and a practical next step. Technical details and long tables use expandable sections. Keep Pulse observations, invented sentiment and entered financial assumptions distinct at the point of use. The Feedback relationship chart combines actual room-use values with explicitly synthetic ratings solely to demonstrate a future live workflow.
+The full navigation follows Understand → Improve → Operate; Presentation view reduces this to the four-chapter story above. Every page has a stated customer purpose, a leading answer or decision, graphical evidence and a practical next step. Technical details and long tables use expandable sections. Keep Pulse observations, invented sentiment and entered financial assumptions distinct at the point of use. The Feedback relationship chart combines actual room-use values with explicitly synthetic ratings solely to demonstrate a future live workflow.
 
 Use Neat's September 2025 partner palette: restrained purple `#5F259F`, neutral backgrounds, Rain `#93ABB3`, Forest `#638C7D`, Sunrise `#DBC684`, Oak `#D5B68F`, Sunset `#D69B8C` and Walnut `#9F8884`. Retain the supplied wordmark and established Maison Neue font from the existing Neat-led experience. Purpose and legibility take priority over decoration. The one-page brief remains an evidence/investigation brief; business-case assumptions have a separate export.
 
@@ -144,6 +159,6 @@ python -m pip install pytest
 python -m pytest tests -q
 ```
 
-Pure calculation tests cover the timestamp migration, duplicate records, unknown sensors, offline exclusion, time weighting, sampling gaps, office boundaries, heatmap reconciliation and room-fit evidence. Streamlit AppTest also loads all six pages and tests cross-page filters and explicit sample mode. Actual live deployment, browser layout and mouse/keyboard dismissal need checking in the separate review app.
+Pure calculation tests cover the timestamp migration, duplicate records, unknown sensors, offline exclusion, time weighting, sampling gaps, office boundaries, heatmap reconciliation and room-fit evidence. Streamlit AppTest loads the full dashboard and compact briefing, and checks shared filters, the presentation switch, financial scope, synthetic feedback, the portrait dialog and simulation results. Actual live deployment, browser layout and mouse/keyboard dismissal need checking in the separate review app.
 
 Deployment reference: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy

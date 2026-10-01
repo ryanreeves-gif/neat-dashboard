@@ -29,24 +29,47 @@ def brand_css():
     </style>""" + (ROOT / "assets/theme.css").read_text() + (ROOT / "assets/customer.css").read_text()
 
 
-def shell(active, title, subtitle):
+def shell(active, title, subtitle, briefing=False):
     from workplace.customer import PURPOSE
     st.set_page_config(page_title=f"Neat | {active}", page_icon=str(ROOT / "assets/neat-logo.svg"), layout="wide")
     st.html(brand_css())
     with st.sidebar:
         logo = base64.b64encode((ROOT / "assets/neat-logo.svg").read_bytes()).decode()
         st.html(f'<div class="brand"><img src="data:image/svg+xml;base64,{logo}" alt="Neat"/><p>Workplace intelligence</p></div>')
+        presentation = st.toggle("Presentation view", **field_state("presentation_mode", True),
+                                 help="Four compact chapters for the webinar. Switch off for the full dashboard.")
         groups = [
             ("Understand", [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
                             ("pages/Feedback.py", "Feedback", "sentiment_satisfied"), ("pages/Environment.py", "Environment", "thermostat")]),
             ("Improve", [("pages/Insights.py", "Opportunities", "insights"), ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
                          ("pages/Value.py", "Value & ROI", "finance_mode")]),
             ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
-        for group, links in groups:
-            st.html(f'<div class="nav-group">{group}</div>')
-            for path, label, icon in links:
+        if presentation:
+            st.html('<div class="nav-group">THE TEN-MINUTE STORY</div>')
+            for path, label, icon in [("app.py", "01 · The conclusion", "dashboard"),
+                                      ("pages/Spaces.py", "02 · The right space", "meeting_room"),
+                                      ("pages/Feedback.py", "03 · The experience", "sentiment_satisfied"),
+                                      ("pages/Environment.py", "04 · The next move", "bolt")]:
                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
-        st.html('<div class="sidebar-note">Understand your spaces.<br>Invest with purpose.</div>')
+            with st.expander("Explore the full analysis"):
+                for _, links in groups:
+                    for path, label, icon in links:
+                        if path in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
+                            continue
+                        st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
+                st.caption("Switch Presentation view off for the detailed version of every chapter.")
+            with st.popover("Presenter guide", icon=":material/co_present:", width="stretch"):
+                st.markdown("**A ten-minute story**")
+                st.write("**0:00–2:00 · The conclusion.** What makes the workplace worth the commute? Lead with one improvement decision, supported by use, experience and an investment case.")
+                st.write("**2:00–4:30 · The right space.** Use one room, its automatic peer and a smaller-room replay. Ask what the room is for before changing its size.")
+                st.write("**4:30–7:00 · The experience.** Contrast employees and guests, then demonstrate a few taps on the portrait survey.")
+                st.write("**7:00–10:00 · The next move.** Play the simulated Pulse → ServiceNow → BMS workflow. Close on one pilot, an owner and a review date.")
+                st.caption("Pulse supplies observations. Feedback is synthetic, financial values are assumptions and building controls are simulated. None measures whether a commute is worthwhile by itself.")
+        else:
+            for group, links in groups:
+                st.html(f'<div class="nav-group">{group}</div>')
+                for path, label, icon in links:
+                    st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
         with st.expander("Data source"):
             st.caption("Published telemetry CSV · cached for 10 minutes")
             st.toggle("Use demonstration data", **field_state("demo_mode", False))
@@ -54,6 +77,8 @@ def shell(active, title, subtitle):
                 fetch.clear()
                 analysis.clear()
                 st.rerun()
+    if briefing:
+        st.html((ROOT / "assets/briefing.css").read_text())
     st.html(f'<div class="eyebrow">{escape(active.upper())} / {escape(PURPOSE.get(active, "").upper())}</div><h1 class="hero">{escape(title)}</h1><p class="subtitle">{escape(subtitle)}</p>')
 
 
@@ -122,7 +147,7 @@ def analysis(_data, fetched, rooms, start, end, office, warm, bright, minimum):
     return samples, inv, stats, summary, issues, previous
 
 
-def context(show_evidence=True):
+def context(show_evidence=True, compact=False):
     data, quality, fetched = load()
     available = set(data.Location.unique())
     locations = (sorted(available) if st.session_state.get("demo_mode", False)
@@ -134,7 +159,8 @@ def context(show_evidence=True):
     previous_locations = st.session_state.get("locations", default)
     selected_locations = [x for x in previous_locations if x in locations]
     st.session_state["locations"] = default if previous_locations and not selected_locations else selected_locations
-    c1, c2, c3, c4 = st.columns([2.5, 2.8, 2.3, 2.4], vertical_alignment="bottom")
+    c1, c2, c3, c4 = ([st.container() for _ in range(4)] if compact else
+                       st.columns([2.5, 2.8, 2.3, 2.4], vertical_alignment="bottom"))
     with c1:
         selected = st.multiselect("Locations", locations, placeholder="Choose locations", **field_state("locations", default))
     with c3:
@@ -165,7 +191,8 @@ def context(show_evidence=True):
     end = min(pd.Timestamp(end_date) + pd.Timedelta(days=1), last)
     inv = a.inventory(scope[scope.Timestamp <= end])
     inv = inv[inv.Timestamp >= start]
-    col1, col2, col3, col4 = st.columns([5, 2.5, 1.7, 1.9], vertical_alignment="center")
+    col1, col2, col3, col4 = ([st.container() for _ in range(4)] if compact else
+                              st.columns([5, 2.5, 1.7, 1.9], vertical_alignment="center"))
     with col4:
         with st.popover("More filters", icon=":material/tune:", width="stretch"):
             include = st.toggle("Include unclassified and non-meeting assets", **field_state("include_assets", False))

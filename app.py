@@ -1,3 +1,7 @@
 from workplace.views import overview
+from workplace.briefing import enabled, run
 
-overview()
+if enabled():
+    run("Overview")
+else:
+    overview()

@@ -5,6 +5,7 @@ from pathlib import Path
 def app():
     at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=45)
     at.session_state["demo_mode"] = True
+    at.session_state["presentation_mode"] = False
     return at.run()
 
 

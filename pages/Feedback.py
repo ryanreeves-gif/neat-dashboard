@@ -1,3 +1,7 @@
 from workplace.feedback_view import feedback_page
+from workplace.briefing import enabled, run
 
-feedback_page()
+if enabled():
+    run("Feedback")
+else:
+    feedback_page()
