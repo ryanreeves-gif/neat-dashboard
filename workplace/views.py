@@ -378,6 +378,8 @@ def spaces():
     with st.container(key="panel_selected_fit"):
         u.section("People and available seats", "fit", "selected_room")
         v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
+        if st.button("Compare alternative layouts", key="room_scenarios", type="primary"):
+            u.go_scenario(room)
     with st.container(key="panel_room_findings"):
         u.section("Findings for this room", "focus", "room")
         found = ctx["issues"][ctx["issues"]["Room key"] == room]

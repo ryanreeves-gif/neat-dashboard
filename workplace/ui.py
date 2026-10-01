@@ -36,6 +36,7 @@ def shell(active, title, subtitle):
         logo = base64.b64encode((ROOT / "assets/neat-logo.svg").read_bytes()).decode()
         st.html(f'<div class="brand"><img src="data:image/svg+xml;base64,{logo}" alt="Neat"/><p>Workplace intelligence</p></div>')
         for path, label, icon in [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
+                                  ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
                                   ("pages/Environment.py", "Environment", "thermostat"), ("pages/Insights.py", "Insights", "insights")]:
             st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
         st.html('<div class="nav-separator"></div>')
@@ -117,7 +118,7 @@ def analysis(_data, fetched, rooms, start, end, office, warm, bright, minimum):
     return samples, inv, stats, summary, issues, previous
 
 
-def context():
+def context(show_evidence=True):
     data, quality, fetched = load()
     available = set(data.Location.unique())
     locations = (sorted(available) if st.session_state.get("demo_mode", False)
@@ -202,7 +203,8 @@ def context():
             st.caption("Room capacity comes from available metadata; unknown values are never assumed to be four seats. Retired assets and room aliases should be resolved in the collector.")
             if quality["status_unreported"]:
                 st.warning("This source does not report device status; coverage cannot exclude offline devices.")
-    evidence_banner(ctx)
+    if show_evidence:
+        evidence_banner(ctx)
     return ctx
 
 
@@ -235,6 +237,11 @@ def plot_style(fig, height=300):
 def go_room(room_key):
     st.session_state["selected_room"] = room_key
     st.switch_page("pages/Spaces.py")
+
+
+def go_scenario(room_key):
+    st.session_state["selected_room"] = room_key
+    st.switch_page("pages/Scenarios.py")
 
 
 def footer():

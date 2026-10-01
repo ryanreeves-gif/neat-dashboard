@@ -34,6 +34,7 @@ The feed is cached for ten minutes. Sidebar → Data source → Refresh observat
 
 - **Overview:** four outcome measures, a weekday demand heatmap, one room-fit example and three rooms to investigate.
 - **Spaces:** attendance versus capacity, individual histories and downloadable observations.
+- **Scenarios:** current capacity alongside two editable room layouts, optional project costs and a downloadable comparison. Open from the sidebar or Spaces → Compare alternative layouts.
 - **Environment:** temperature, humidity, light and VOC trends, plus environmental evidence.
 - **Insights:** all qualifying findings with owners, evidence and next steps.
 - **Operations:** latest selected room status and a downloadable draft facilities handoff.
@@ -62,6 +63,12 @@ The existing sheet changed from unpadded US dates (e.g. `9/10/2026 11:55:32`, Se
 Capacity uses available metadata within the same location and room name, filling missing entries forwards then backwards. Unknown capacity is never assumed to be four seats. Metadata corrections, renamed rooms and parallel platform aliases require reconciliation in the collector before making estate-wide decisions.
 
 ## Claims and integrations
+
+### Room-size scenarios
+
+The scenario page replays one room's observed occupied time against proposed capacities. Each people count is treated as one group that must fit in one room. Two four-seat rooms therefore cannot accommodate an observed count of six in this model. Empty time, gaps and offline data are excluded from the fit denominator. The largest proposed room sets the capacity threshold; additional room use, concurrent demand and future utilisation are not predicted.
+
+Options and costs are remembered per room during the browser session. Costs are optional user-entered totals, with separate values for GBP, EUR and NOK; changing currency does not convert a cost. No savings or payback is inferred. The export includes the room, selected dates/hours, data coverage, costs and assumptions. Validate dimensions, bookings, peak demand, accessibility, acoustics and AV requirements before adopting a layout.
 
 Temperature does not prove heating is on; lux does not prove electric lighting is on. No-shows require bookings. Energy and verified savings require controls, meters and an agreed baseline. VOC remains in source units until the collector's field is confirmed; it is not CO₂ or a carbon-emissions measure.
 
