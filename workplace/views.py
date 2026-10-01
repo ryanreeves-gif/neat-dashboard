@@ -361,6 +361,7 @@ def environment_actions(ctx, room):
 
 
 def spaces():
+    from workplace.peer_view import automatic_peer
     u.shell("Spaces", "A better fit for every room.", "Separate how often a room is used from how well its size meets demand.")
     v.styles()
     ctx = u.context()
@@ -371,6 +372,7 @@ def spaces():
     with c[1]: u.metric("Typical attendance", u.fmt(r["Typical attendance"], digits=1), "People, when occupied", "attendance", "space_att")
     with c[2]: u.metric("Recorded capacity", u.fmt(r.Capacity), "Seats from source metadata", "fit", "space_cap")
     with c[3]: u.metric("Observation coverage", u.fmt(r["Coverage %"], "%"), "Of selected operating hours", "coverage", "space_cov")
+    automatic_peer(ctx, room)
     with st.container(key="panel_history"):
         u.section("When is this room used?", "trend")
         signal = st.selectbox("Signal", list(SIGNALS), key="room_signal")

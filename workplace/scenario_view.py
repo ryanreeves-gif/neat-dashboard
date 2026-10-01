@@ -11,6 +11,7 @@ import streamlit as st
 from workplace import analytics as a, ui as u, visuals as v
 from workplace.scenarios import ASSUMPTIONS, attendance_bands, evaluate_layout, export_comparison, room_evidence
 from workplace.views import choose_room, csv_download
+from workplace.peer_view import automatic_peer
 
 
 CSS = """<style>
@@ -94,6 +95,7 @@ def scenarios():
         u.footer()
         return
     capacity = int(capacity)
+    automatic_peer(ctx, room)
     evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
     st.html('<div class="scenario-observed">' + "".join(
         f'<div><strong>{number(value, suffix, digits)}</strong><span>{label}</span></div>' for value, suffix, digits, label in [

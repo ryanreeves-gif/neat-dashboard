@@ -11,7 +11,7 @@ A Streamlit redesign of the existing Neat dashboard: executive overview, space u
 5. Check the review app on your webinar laptop: date/location filters, one room's evidence, every info popover, navigation, downloads and the narrower window layout. Compare representative totals with the collector.
 6. Once you approve the review, merge the branch into `main`; the app connected to that branch can deploy the new version. Revert the merge to restore the previous app if necessary.
 
-No changes have been pushed to GitHub or published to the existing Streamlit app as part of this package. The supplied code was validated locally. A browser visual review remains required because the available cloud browser could not access the local server.
+Development is published to `feature/neat-workplace-dashboard` and the separate Streamlit preview. The original `main` app is kept unchanged. Streamlit may require a reboot to load a new build; verify the preview before merging.
 
 ## Run locally
 
@@ -33,8 +33,10 @@ The feed is cached for ten minutes. Sidebar → Data source → Refresh observat
 ## Experience
 
 - **Overview:** four outcome measures, a weekday demand heatmap, one room-fit example and three rooms to investigate.
-- **Spaces:** attendance versus capacity, individual histories and downloadable observations.
+- **Spaces:** automatic comparison with a similarly sized room, attendance versus capacity, individual histories and downloadable observations.
 - **Scenarios:** current capacity alongside two editable room layouts, optional project costs and a downloadable comparison. Open from the sidebar or Spaces → Compare alternative layouts.
+- **Feedback:** clearly labelled synthetic employee and customer/guest results across the room feed's history, audience/date/room filters, exports and an interactive portrait survey.
+- **Frame:** a standalone portrait survey demonstration, opened from Feedback. The `room` query parameter identifies its room; submissions remain in the browser's Streamlit session.
 - **Environment:** temperature, humidity, light and VOC trends, plus environmental evidence.
 - **Insights:** all qualifying findings with owners, evidence and next steps.
 - **Operations:** latest selected room status and a downloadable draft facilities handoff.
@@ -66,9 +68,28 @@ Capacity uses available metadata within the same location and room name, filling
 
 ### Room-size scenarios
 
+Spaces and Scenarios automatically select a capacity peer from London EC or Oslo EC, independent of the selected room/location filters. The closest recorded capacity wins (maximum difference 25% or two seats), followed by the same location, higher coverage, observed hours and room key. Candidates need a source record in the date range. Both rooms use identical date/hour filters; limited coverage is shown. A capacity match does not imply identical equipment, room purpose or working patterns.
+
 The scenario page replays one room's observed occupied time against proposed capacities. Each people count is treated as one group that must fit in one room. Two four-seat rooms therefore cannot accommodate an observed count of six in this model. Empty time, gaps and offline data are excluded from the fit denominator. The largest proposed room sets the capacity threshold; additional room use, concurrent demand and future utilisation are not predicted.
 
 Options and costs are remembered per room during the browser session. Costs are optional user-entered totals, with separate values for GBP, EUR and NOK; changing currency does not convert a cost. No savings or payback is inferred. The export includes the room, selected dates/hours, data coverage, costs and assumptions. Validate dimensions, bookings, peak demand, accessibility, acoustics and AV requirements before adopting a layout.
+
+### Feedback demonstration and path to a live pilot
+
+Feedback is synthetic even when the telemetry toggle is set to the real feed. All generated rows and interactive tryouts carry `is_demo=true`, a versioned schema and a source label. Every displayed historical result, quote and export is labelled as sample data. These figures must not be used as real customer endorsements or measured employee satisfaction.
+
+The deterministic generator uses one actual source timestamp in each three-hour office-time bucket per room/weekday (maximum four records/day). It covers each positive-capacity room's entire available history, including historical rooms when selected. It does not fill absent source dates or infer opinions from environmental/occupancy signals. Appending future source days preserves existing sample IDs and ratings. Choose **Full history** to show the full range; all other shared filters apply normally. The current feed begins on 9 April 2026 under the existing source date parser. Source time semantics remain unchanged.
+
+Guest samples deliberately favour ratings of 4–5 (98% probability for spaces, 99% for equipment); employees are positive with more mixed experiences (88% and 92%). These are generation settings, not achieved survey statistics. Charts and exports calculate the actual resulting sample values. Optional issues and low-score comments provide examples for future service workflows.
+
+The portrait form has no preselected audience or ratings. It validates both ratings, offers temperature/air-quality/lighting/technology issues and optional comments, and clears selections for the next visitor. IT help only shows a demonstration explanation. Interactive submissions use their actual UTC submission time and a separate `Interactive demonstration` source; they never alter or backdate the historical sample dataset. They are visible/exportable within the same browser session, not shared across devices, and disappear when that session ends.
+
+For a future pilot, replace the sample source at the result-loading boundary and keep `sample_feedback` separately selectable. Persist validated responses through an authenticated HTTPS service/database, with a stable room ID, UTC timestamp, explicit audience choice, two 1–5 ratings and optional issue/comment. Maintain `schema_version`, unique response IDs and idempotent submission. Configure each Frame with its room, reset after completion/inactivity, restrict dashboard access, and agree retention and appropriate privacy text. Connect IT help to an agreed support destination; a support request should not be inferred from a survey rating. Neither persistent collection nor a service-desk integration is present in this demo.
+
+Neat's official guidance describes portrait Frame touchscreens and custom web apps managed through Pulse. Device entitlement, mode, networking, kiosk behaviour and touch layout need verification on the actual Frame before a pilot:
+- https://support.neat.no/article/how-to-set-up-a-neat-frame/
+- https://support.neat.no/article/get-started-neat-pulse-app-hub/
+- https://neat.no/app-hub/
 
 Temperature does not prove heating is on; lux does not prove electric lighting is on. No-shows require bookings. Energy and verified savings require controls, meters and an agreed baseline. VOC remains in source units until the collector's field is confirmed; it is not CO₂ or a carbon-emissions measure.
 

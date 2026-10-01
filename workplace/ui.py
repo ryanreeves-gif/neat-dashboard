@@ -37,6 +37,7 @@ def shell(active, title, subtitle):
         st.html(f'<div class="brand"><img src="data:image/svg+xml;base64,{logo}" alt="Neat"/><p>Workplace intelligence</p></div>')
         for path, label, icon in [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
                                   ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
+                                  ("pages/Feedback.py", "Feedback", "sentiment_satisfied"),
                                   ("pages/Environment.py", "Environment", "thermostat"), ("pages/Insights.py", "Insights", "insights")]:
             st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
         st.html('<div class="nav-separator"></div>')
@@ -182,7 +183,7 @@ def context(show_evidence=True):
         st.info("No meeting-room observations in this scope. Adjust the dates or include unclassified assets under More filters.")
         st.stop()
     samples, inv, stats, summary, issues, previous = analysis(scope, fetched, room_keys, start, end, mode == "Office hours", warm, bright, minimum)
-    ctx = dict(data=scope, samples=samples, inventory=inv, stats=stats, summary=summary, issues=issues, previous=previous,
+    ctx = dict(data=scope, all_data=data, samples=samples, inventory=inv, stats=stats, summary=summary, issues=issues, previous=previous,
                start=start, end=end, office=mode == "Office hours", quality=quality, fetched=fetched,
                excluded=len(a.inventory(scope[scope.Timestamp <= end]))-len(inv), thresholds=dict(warm=warm, bright=bright, minimum=minimum),
                demo=bool(st.session_state.get("demo_mode", False)),
