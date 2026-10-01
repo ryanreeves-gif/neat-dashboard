@@ -26,7 +26,7 @@ def evidence_summary(ctx):
 
 
 def decision_actions(ctx, limit=3):
-    """Data readiness first, then distinct rooms ordered by evidence duration.
+    """Data readiness first, then distinct rooms across decision themes.
 
     70% is an explicit review-screening rule, not a confidence score or an
     investment approval. Low-coverage room findings remain available in Insights.
@@ -58,7 +58,19 @@ def decision_actions(ctx, limit=3):
                   "Compare lighting operation and metered energy after an approved trial."),
     }
     seen = set()
-    for _, row in ctx["issues"].sort_values(["Evidence hours", "Room key"], ascending=[False, True]).iterrows():
+    ranked = ctx["issues"].copy()
+    # Cover different customer decisions before showing another finding of the same kind.
+    ranked["theme_order"] = ranked.Kind.map({"fit":0,"warm":1,"light":2}).fillna(3)
+    ranked = ranked.sort_values(["theme_order","Evidence hours","Room key"],ascending=[True,False,True])
+    eligible = ranked[ranked["Room key"].map(stats["Coverage %"]).ge(MIN_REVIEW_COVERAGE)]
+    first_indices, chosen_rooms = [], set()
+    for kind in ["fit","warm","light"]:
+        theme = eligible[eligible.Kind.eq(kind) & ~eligible["Room key"].isin(chosen_rooms)]
+        if not theme.empty:
+            first_indices.append(theme.index[0])
+            chosen_rooms.add(theme.iloc[0]["Room key"])
+    ranked = pd.concat([eligible.loc[first_indices],eligible.drop(first_indices)])
+    for _, row in ranked.iterrows():
         key = row["Room key"]
         if key in seen or key not in stats.index or row.Kind not in templates:
             continue

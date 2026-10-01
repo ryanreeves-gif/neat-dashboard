@@ -8,12 +8,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from workplace import analytics as a, ui as u
+from workplace import analytics as a, ui as u, customer as c
 from workplace.data import load
 from workplace.feedback import AUDIENCES, ISSUES, demo_record, feedback_summary, filter_feedback, sample_feedback
 from workplace.views import choose_room, csv_download
 
-COLOURS = ["#BC7F7F", "#C6A080", "#C8B782", "#92B2A5", "#6A87D0"]
+COLOURS = ["#D69B8C", "#D5B68F", "#DBC684", "#93ABB3", "#638C7D"]
 FACES = {1: "1 😞", 2: "2 🙁", 3: "3 😐", 4: "4 🙂", 5: "5 😄"}
 
 
@@ -104,7 +104,7 @@ def results(records, audience):
         d = records.assign(day=records.timestamp.dt.normalize())
         frequency = "W-MON" if (d.day.max() - d.day.min()).days > 31 else "D"
         fig = go.Figure()
-        for group, colour in zip(AUDIENCES, ["#6A87D0", "#8B6AAF"]):
+        for group, colour in zip(AUDIENCES, ["#638C7D", "#5F259F"]):
             g = d[d.audience.eq(group)].groupby(pd.Grouper(key="day", freq=frequency)).agg(score=("experience", "mean"), n=("experience", "size"))
             if not g.empty:
                 fig.add_trace(go.Scatter(x=g.index, y=g.score, customdata=g.n, name=group, mode="lines+markers",
@@ -157,8 +157,30 @@ def session_results():
     csv_download(df, "Download my demo submissions", "neat-feedback-tryouts-DEMO.csv", "feedback_tryout_export")
 
 
+def use_and_experience(ctx, records):
+    if records.empty:
+        return
+    ratings=records.groupby("room_key").agg(Rating=("experience","mean"),Responses=("experience","size")).reset_index()
+    combined=ctx["stats"].merge(ratings,left_on="Room key",right_on="room_key").dropna(subset=["Utilisation %"])
+    if combined.empty:
+        return
+    with st.container(key="panel_use_experience"):
+        st.html('<span class="source-tag sample">Pulse use + synthetic sentiment · demonstration overlay</span>')
+        st.subheader("Room use is only half the story.")
+        st.caption("A future live view can show whether busy rooms are also enjoyable. Here the ratings are invented; they cannot establish a real relationship with use.")
+        fig=go.Figure(go.Scatter(x=combined["Utilisation %"],y=combined.Rating,mode="markers+text",text=combined["Room Name"],textposition="top center",
+            marker=dict(size=(combined.Responses/combined.Responses.max()*22+14),color="#5F259F",opacity=.65,line=dict(color="white",width=1.5)),
+            customdata=combined[["Room key","Responses","Coverage %"]],
+            hovertemplate="%{customdata[0]}<br>Observed time in use: %{x:.1f}%<br>Sample space rating: %{y:.2f} / 5<br>%{customdata[1]} sample responses<br>Occupancy coverage: %{customdata[2]:.0f}%<extra></extra>"))
+        u.plot_style(fig,350)
+        fig.update_xaxes(title="Time in use · Pulse observations (%)",range=[-4,104],ticksuffix="%")
+        fig.update_yaxes(title="Space rating · sample feedback / 5",range=[.8,5.35],dtick=1)
+        st.plotly_chart(fig,width="stretch",config={"displayModeBar":False},key="feedback_use_relationship")
+        st.caption("Each bubble is a room. Bubble size reflects sample response count; hover for coverage. All room and audience filters apply.")
+
+
 def feedback_page():
-    u.shell("Feedback", "Great spaces. Happy people.", "Explore the employee and showroom guest experience, then try it on a portrait screen.")
+    u.shell("Feedback", "Great spaces start with people.", "Understand what employees and guests value, where friction appears and how to measure a better experience.")
     styles()
     ctx = u.context(show_evidence=False)
     records = generated_feedback(ctx["all_data"], ctx["fetched"])
@@ -172,6 +194,8 @@ def feedback_page():
                                        **u.field_state("feedback_audience", "Everyone"))
         filtered = filter_feedback(records, ctx["inventory"]["Room key"], ctx["start"], ctx["end"], ctx["office"], audience)
         results(filtered, audience)
+        use_and_experience(ctx, filtered)
+        c.next_step("In a live pilot, collect the same questions before and after a change. Review employees and guests separately alongside room use.")
         csv_download(filtered, "Download sample feedback", "neat-feedback-SAMPLE.csv", "feedback_export")
         with st.expander("About these samples and a future live pilot"):
             st.write("Samples use each room's recorded weekdays and office hours, going back to its first available observations. Ratings and comments are generated independently of sensor readings. Missing source dates stay empty. Choose Full history above to see the whole available period.")

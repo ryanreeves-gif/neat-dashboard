@@ -83,6 +83,7 @@ div[class*="st-key-finding_"] [data-testid="stExpander"]{border:0}
 
 def styles():
     st.html(CSS)
+    st.html((u.ROOT / "assets/customer.css").read_text())
 
 
 def hourly_occupancy(samples, start, end, office):
@@ -368,7 +369,8 @@ def condition_tiles(ctx, room):
             series = hourly_sensor(samples, name, ctx["start"], ctx["end"], ctx["office"])
             series = series.reindex(pd.date_range(ctx["start"].floor("h"), ctx["end"].floor("h"), freq="h"))
             display_unit = "" if name == "VOC" or pd.isna(value) else unit
-            st.html(f'<div class="sensor-value" style="color:{color}">{escape(u.fmt(value, digits=1 if name == "Temperature" else 0))}<small>{escape(display_unit)}</small></div><div class="sensor-status" style="color:{color}">{escape(status)}</div>{sparkline(series, color)}')
+            st.html(f'<div class="sensor-value" style="color:{color}">{escape(u.fmt(value, digits=1 if name == "Temperature" else 0))}<small>{escape(display_unit)}</small></div><div class="sensor-status" style="color:{color}">{escape(status)}</div>')
+            st.image(sparkline(series, color), width="stretch")
     st.caption("Select a card heading to explore its trend. Mini charts use individual scales.")
     return current
 

@@ -11,6 +11,7 @@ import streamlit as st
 from workplace import analytics as a
 from workplace import ui as u
 from workplace import visuals as v
+from workplace import customer as c
 from workplace.executive import decision_actions
 from workplace.brief import pdf_brief
 
@@ -85,7 +86,7 @@ def report(ctx):
 def executive_panel(ctx):
     with st.container(key="panel_decisions"):
         u.section("Decisions to explore", "focus")
-        st.caption("Data readiness first, then room candidates by observed evidence hours. Benefits need validation; this is not a financial ranking.")
+        st.caption("A short list of evidence-led next steps. Validate the benefit and cost before committing.")
         actions = decision_actions(ctx)
         columns = st.columns(len(actions), gap="medium")
         for i, (column, action) in enumerate(zip(columns, actions)):
@@ -94,13 +95,13 @@ def executive_panel(ctx):
                 st.html(f'''<div class="decision-number">{i+1:02d} / INVESTIGATE</div>
                   <h3 class="decision-title">{escape(action['title'])}</h3>
                   <div class="decision-scope">{escape(action['scope'])}{escape(coverage)}</div>
-                  <div class="decision-field"><strong>What we observed</strong><p>{escape(action['evidence'])}</p></div>
-                  <div class="decision-field"><strong>Potential employee benefit</strong><p>{escape(action['benefit'])}</p></div>
-                  <div class="decision-field"><strong>Next step</strong><p>{escape(action['action'])}</p></div>
-                  <div class="decision-meta">Suggested owner: {escape(action['owner'])}<br>Cost: {escape(action['cost'])}</div>''')
+                  <div class="decision-evidence">{escape(action['evidence'])}</div>
+                  <div class="decision-outcome">{escape(action['benefit'])}</div>
+                  <div class="decision-meta">Suggested owner: {escape(action['owner'])}</div>''')
                 with st.expander("How to assess the result"):
+                    st.write(action["action"])
                     st.write(action["measure"])
-                    st.caption("Agree a baseline, target, budget and review date with the owner before a pilot.")
+                    st.caption(f"Cost: {action['cost']}. Agree a baseline, target, budget and review date before a pilot.")
                 if action["room_key"] and st.button("Explore evidence", key=f"decision_evidence_{i}", width="stretch"):
                     u.go_room(action["room_key"])
         st.write("")
@@ -110,24 +111,43 @@ def executive_panel(ctx):
         with c2:
             st.download_button("Download one-page decision brief", pdf_brief(ctx), "neat-workplace-decision-brief.pdf",
                                "application/pdf", key="executive_pdf", type="primary", width="stretch")
-        st.caption("PDF follows your room, location, date and hours filters. Bookings, employee feedback and cost data are not connected.")
+        st.caption("PDF follows the selected evidence. Live bookings, feedback and financial outcomes are not connected.")
 
 
 def overview():
-    u.shell("Overview", "Your workplace. Understood.", "See how your spaces work. Know where to focus next.")
+    from workplace.feedback import feedback_summary
+    u.shell("Overview", "Make every space count.", "See how your spaces are used, how the experience could be measured and where to focus your next investment.")
     v.styles()
     ctx = u.context()
     s, previous = ctx["summary"], ctx["previous"]
     delta = None
     if s["coverage"] >= 70 and previous["coverage"] >= 70 and pd.notna(previous["utilisation"]):
-        delta = f"{s['utilisation'] - previous['utilisation']:+.0f} percentage points vs previous period"
-    cols = st.columns(4, gap="medium")
-    with cols[0]: u.metric("Rooms monitored", str(s["rooms"]), "In your selected scope", "rooms", "rooms")
-    with cols[1]: u.metric("Time in use", u.fmt(s["utilisation"], "%"), "Share of valid observed room-hours", "utilisation", "util", delta)
-    with cols[2]: u.metric("Typical attendance", u.fmt(s["attendance"], digits=1), "People, while rooms are occupied", "attendance", "attendance")
-    with cols[3]: u.metric("Rooms to review", str(ctx["issues"]["Room key"].nunique()), "With evidence worth investigating", "reviews", "reviews")
-    st.write("")
-    executive_panel(ctx)
+        change = round(s['utilisation'] - previous['utilisation'])
+        delta = ("No rounded change" if change == 0 else f"{change:+d} percentage points") + " vs previous period"
+    counts = c.opportunity_counts(ctx)
+    title = (f"Rooms were in use for {s['utilisation']:.0f}% of observed time." if pd.notna(s['utilisation'])
+             else "Build a usable room baseline before investing.")
+    detail = "Check peak demand and room fit before adding space or equipment. Observed empty time is an opportunity to investigate, not a cash saving."
+    if s["coverage"] < 70:
+        detail = "Coverage is limited. Fix observation gaps before treating this period as representative of demand."
+    c.answer("What the selected period tells us", title, detail, "rain", str(s["rooms"]), "rooms in your selected scope")
+    left,right=st.columns([1,1.65],gap="medium")
+    with left,st.container(key="panel_time_mix"):
+        u.section("Where does the time go?", "utilisation", "mix")
+        c.time_mix_chart(s)
+        if delta:st.caption(delta)
+    with right:
+        cols=st.columns(2)
+        with cols[0]:c.stat("Typical attendance",u.fmt(s["attendance"],digits=1),"People while rooms are occupied","forest","Pulse observations")
+        with cols[1]:c.stat("Room-fit opportunities",str(counts["fit"]),"Rooms meeting the fit review rules","rain","Pulse observations")
+        st.write("")
+        sentiment=feedback_summary(c.feedback_in_scope(ctx))
+        with st.container(key="panel_overview_sentiment"):
+            st.html('<span class="source-tag sample">Sample sentiment · invented responses</span>')
+            st.markdown(f"**{u.fmt(sentiment['positive'], '%', 1)} positive space ratings** · {sentiment['responses']:,} sample responses")
+            st.caption("The future value: combine observed use with real employee and guest feedback before and after a change.")
+            st.page_link("pages/Feedback.py",label="Explore the experience",icon=":material/arrow_forward:")
+        st.page_link("pages/Value.py",label="Build a cost and ROI model",icon=":material/finance_mode:")
     st.write("")
     left, right = st.columns([1.55, 1], gap="medium")
     with left, st.container(key="panel_heatmap"):
@@ -155,6 +175,7 @@ def overview():
             v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
             if st.button("Explore this room", key="fit_room", type="primary"):
                 u.go_room(r["Room key"])
+    executive_panel(ctx)
     u.footer()
 
 
@@ -362,26 +383,29 @@ def environment_actions(ctx, room):
 
 def spaces():
     from workplace.peer_view import automatic_peer
-    u.shell("Spaces", "A better fit for every room.", "Separate how often a room is used from how well its size meets demand.")
+    u.shell("Spaces", "The right room for the way you work.", "Find where the room mix supports demand and where a different size may work better.")
     v.styles()
     ctx = u.context()
     room = choose_room(ctx)
     r = ctx["stats"].set_index("Room key").loc[room]
-    c = st.columns(4)
-    with c[0]: u.metric("Space utilisation", u.fmt(r["Utilisation %"], "%"), "Of observed room-hours", "utilisation", "space_util")
-    with c[1]: u.metric("Typical attendance", u.fmt(r["Typical attendance"], digits=1), "People, when occupied", "attendance", "space_att")
-    with c[2]: u.metric("Recorded capacity", u.fmt(r.Capacity), "Seats from source metadata", "fit", "space_cap")
-    with c[3]: u.metric("Observation coverage", u.fmt(r["Coverage %"], "%"), "Of selected operating hours", "coverage", "space_cov")
-    automatic_peer(ctx, room)
-    with st.container(key="panel_history"):
-        u.section("When is this room used?", "trend")
-        signal = st.selectbox("Signal", list(SIGNALS), key="room_signal")
-        room_trend(ctx, room, signal, "room_history")
+    title,detail,tone=c.room_story(r)
+    c.answer(r['Room Name'] + " · the takeaway",title,detail,tone)
+    cols = st.columns(4)
+    with cols[0]: u.metric("Time in use", u.fmt(r["Utilisation %"], "%"), "Of observed room-hours", "utilisation", "space_util")
+    with cols[1]: u.metric("Typical attendance", u.fmt(r["Typical attendance"], digits=1), "People, when occupied", "attendance", "space_att")
+    with cols[2]: u.metric("Recorded capacity", u.fmt(r.Capacity), "Seats from source metadata", "fit", "space_cap")
+    with cols[3]: u.metric("Observation coverage", u.fmt(r["Coverage %"], "%"), "Of selected operating hours", "coverage", "space_cov")
     with st.container(key="panel_selected_fit"):
         u.section("People and available seats", "fit", "selected_room")
         v.capacity_bar(r["Typical attendance"], r.Capacity, r["P90 attendance"])
         if st.button("Compare alternative layouts", key="room_scenarios", type="primary"):
             u.go_scenario(room)
+    automatic_peer(ctx, room)
+    with st.container(key="panel_history"):
+        u.section("Check the peaks before changing the room", "trend")
+        signal = st.selectbox("Signal", list(SIGNALS), key="room_signal")
+        room_trend(ctx, room, signal, "room_history")
+    c.experience_bridge(ctx,room)
     with st.container(key="panel_room_findings"):
         u.section("Findings for this room", "focus", "room")
         found = ctx["issues"][ctx["issues"]["Room key"] == room]
@@ -409,10 +433,14 @@ def spaces():
 
 
 def environment():
-    u.shell("Environment", "Make every space feel better.", "Understand room conditions and investigate recurring signals.")
+    u.shell("Environment", "Comfort with a clearer purpose.", "Spot recurring conditions, protect the room experience and investigate avoidable operation.")
     v.styles()
     ctx = u.context()
     room = choose_room(ctx)
+    selected_issues=ctx["issues"][ctx["issues"]["Room key"].eq(room) & ctx["issues"].Kind.isin(["warm","light"])]
+    title = ("This room has empty-time conditions worth investigating." if not selected_issues.empty
+             else "No repeated empty-room signals meet your review settings.")
+    c.answer("The facilities decision",title,"Check actual HVAC and lighting operation before changing settings. Temperature and light readings alone do not establish energy use or savings.","sunset")
     with st.container(key="panel_environment"):
         u.section("Room conditions", "environment")
         signal = v.condition_tiles(ctx, room)
@@ -425,20 +453,31 @@ def environment():
             st.write(f"{signal} observation coverage: {u.fmt(100 * hours / scheduled if scheduled else np.nan, '%')} \xb7 {hours:.1f} observed hours")
             st.caption("Review colours indicate the selected investigation levels, not a confirmed fault or health rating. Latest selected records can be historical.")
             if signal == "VOC": st.write("VOC is shown in source units. Confirm whether the collector supplies VOC Index or concentration before applying a threshold; this is not measured CO\u2082.")
-    environment_actions(ctx, room)
     with st.container(key="panel_environment_findings"):
-        u.section("Conditions to investigate", "focus", "environment")
+        u.section("Where facilities can focus next", "focus", "environment")
         st.caption("Across the selected scope \xb7 warmth and brightness alone do not establish energy use")
         finding_rows(ctx["issues"][ctx["issues"].Kind.isin(["warm", "light"])], "environment", 10, environment_evidence=True)
+    with st.expander("Connect conditions to the experience demo"):
+        c.experience_bridge(ctx,room)
+    environment_actions(ctx, room)
     u.footer()
 
 
 def insights():
-    u.shell("Insights", "Evidence. Then action.", "Prioritise the next conversation with facilities and workplace teams.")
+    u.shell("Insights", "Turn opportunity into a plan.", "Choose a focused improvement, give it an owner and agree how you will measure success.")
     v.styles()
     ctx = u.context()
+    counts=c.opportunity_counts(ctx)
+    c.answer("Your improvement pipeline",f"{ctx['issues']['Room key'].nunique()} rooms have evidence to explore.",
+             "Start with a small pilot. Compare the room evidence, model the cost, then verify the effect on use and real user experience.","forest")
+    for column,(label,value,detail,tone) in zip(st.columns(3),[
+        ("Room mix",counts["fit"],"Rooms with consistently small observed groups","rain"),
+        ("Temperature",counts["warm"],"Rooms warm during observed empty periods","sunset"),
+        ("Lighting",counts["light"],"Rooms bright during observed empty periods","sunrise")]):
+        with column:c.stat(label,str(value),detail,tone,"Pulse observations")
+    st.caption("A room can appear in more than one theme. These are investigation candidates, not confirmed faults or savings.")
     with st.container(key="panel_insights"):
-        u.section("All findings", "focus", "insights")
+        u.section("Evidence to take into the next conversation", "focus", "insights")
         labels = {"All findings": None, "Room fit": "fit", "Warm while empty": "warm", "Bright while empty": "light"}
         choice = st.selectbox("Finding type", list(labels))
         issues = ctx["issues"]
@@ -448,21 +487,48 @@ def insights():
         csv_download(issues.drop(columns=["Rank", "Kind"]), "Download evidence and next steps", "neat-findings.csv", "insights_csv")
     with st.expander("What would strengthen the business case?"):
         st.write("**Bookings** establish whether an empty room was actually reserved. **Building controls** establish whether HVAC or lighting was operating. **Energy meters and an agreed baseline** support measured savings. Link those sources to the same room identifier and timestamps before reporting no-shows or financial outcomes.")
+    left,right=st.columns(2)
+    with left:st.page_link("pages/Scenarios.py",label="Test a layout change",icon=":material/compare_arrows:")
+    with right:st.page_link("pages/Value.py",label="Assess cost and return",icon=":material/finance_mode:")
     u.footer()
 
 
 def operations():
-    u.shell("Operations", "Keep the workplace ready.", "Review the latest recorded room state and prepare evidence for a handoff.")
+    u.shell("Operations", "Keep the experience ready.", "See which rooms need an operational check and give the right team useful evidence.")
     v.styles()
     ctx = u.context()
     inv = ctx["inventory"]
+    online=int(inv["Device Status"].eq("Online").sum())
+    offline=int(inv["Device Status"].eq("Offline").sum())
+    other=len(inv)-online-offline
+    latest=inv.Timestamp.max()
+    stale=(latest-inv.Timestamp).dt.total_seconds().gt(3600)
+    c.answer("The readiness decision",f"{online} of {len(inv)} rooms were last reported online.",
+             "Review offline, unknown and older records before a visit or important meeting. This is the selected period's last snapshot, not a live room-readiness guarantee.","rain")
+    for column,(label,value,detail,tone) in zip(st.columns(4),[
+        ("Online",online,"Latest selected room status","forest"),("Offline",offline,"Check device and network status","sunset"),
+        ("Unknown / unreported",other,"Do not assume these rooms are online","sunrise"),
+        ("Older room records",int(stale.sum()),"Over 1 hour behind the latest room record","rain")]):
+        with column:c.stat(label,str(value),detail,tone)
     with st.container(key="panel_fleet"):
         u.section("Latest recorded room state", "fleet")
         st.caption("One latest record per named room \xb7 timestamps reflect the selected date range")
         columns = ["Room Name", "Location", "Device Status", "Platform", "Software Version", "Timestamp"]
-        st.dataframe(inv[columns].sort_values(["Device Status", "Room Name"]), hide_index=True, width="stretch")
-        st.dataframe(inv.Platform.value_counts().rename_axis("Platform").reset_index(name="Rooms"), hide_index=True, width="stretch")
-        csv_download(inv[columns], "Download room state", "neat-room-state.csv", "fleet_csv")
+        display=inv.assign(Review=~inv["Device Status"].eq("Online") | stale).sort_values(["Review","Timestamp","Room Name"],ascending=[False,True,True])
+        st.html('<div class="room-status-grid">'+''.join(
+            f'<article class="room-status-card {"review" if row.Review else ""}"><div class="state">{escape(row["Device Status"].upper())}{" · OLDER RECORD" if latest-row.Timestamp>pd.Timedelta(hours=1) else ""}</div>'
+            f'<strong>{escape(row["Room Name"])}</strong><span>{escape(row.Location)} · {escape(row.Platform)}</span><br><small>{row.Timestamp:%d %b %Y, %H:%M} · source clock</small></article>'
+            for _,row in display.head(12).iterrows())+'</div>')
+        if len(display)>12:st.caption("Showing the first 12 rooms, with checks first. All records are available below.")
+        with st.expander("All room records and platform mix"):
+            st.dataframe(inv[columns].sort_values(["Device Status", "Room Name"]), hide_index=True, width="stretch")
+            platforms=inv.Platform.value_counts()
+            fig=go.Figure(go.Bar(x=platforms.values,y=platforms.index,orientation="h",marker_color="#93ABB3",text=platforms.values,textposition="auto",
+                hovertemplate="%{y}<br>%{x} named rooms<extra></extra>"))
+            u.plot_style(fig,max(180,45*len(platforms)))
+            fig.update_xaxes(title="Named rooms",dtick=1)
+            chart(fig,"fleet_platforms")
+            csv_download(inv[columns], "Download room state", "neat-room-state.csv", "fleet_csv")
     with st.container(key="panel_workflow"):
         u.section("Preview a facilities handoff", "workflow")
         st.caption("Draft export only \xb7 no ticket, device command or building control is sent")
@@ -471,35 +537,52 @@ def operations():
         else:
             idx = st.selectbox("Finding to include", list(issues.index), format_func=lambda i: f"{issues.loc[i, 'Room key']} \xb7 {issues.loc[i, 'Finding']}")
             r = issues.loc[idx]
+            c.next_step(f"{r.Owner}: {r['Next step']}")
+            st.write(f"**{r['Room key']}** · {r.Evidence}")
             payload = {"status": "draft_not_sent", "demonstration_data": bool(st.session_state.get("demo_mode")),
                        "room": r["Room key"], "finding": r.Finding, "evidence": r.Evidence,
                        "period_start": ctx["start"].isoformat(), "period_end": ctx["end"].isoformat(),
                        "clock": "recorded_source_time", "operating_hours": "weekdays_08_19" if ctx["office"] else "all_hours",
                        "evidence_hours": float(r["Evidence hours"]), "investigation_thresholds": ctx["thresholds"],
                        "suggested_owner": r.Owner, "proposed_next_step": r["Next step"], "confirmed_energy_savings": None}
-            st.json(payload, expanded=False)
+            with st.expander("Technical handoff details"):
+                st.json(payload, expanded=False)
             st.download_button("Download draft handoff", json.dumps(payload, indent=2), "neat-handoff-draft.json", "application/json")
     u.footer()
 
 
 def ask():
-    u.shell("Ask the data", "Start with a useful question.", "Clear answers grounded in the observations you have selected.")
+    u.shell("Ask the data", "A useful answer. A clear next step.", "Start with the customer question and follow the evidence into the right decision.")
     v.styles()
     ctx = u.context()
     with st.container(key="panel_ask"):
         u.section("Explore a question", "ask")
-        question = st.selectbox("What would you like to understand?", ["Where should we focus first?", "Which rooms may be oversized?", "Where should facilities investigate?", "Which rooms were last reported offline?", "How much of the period did we observe?"])
-        if question == "Where should we focus first?": finding_rows(ctx["issues"].drop_duplicates("Room key"), "ask_priority", 3)
-        elif question == "Which rooms may be oversized?": finding_rows(ctx["issues"][ctx["issues"].Kind.eq("fit")], "ask_fit")
+        question = st.selectbox("What would you like to understand?", ["Where should we focus first?", "Which rooms may be oversized?", "Where should facilities investigate?", "Which rooms were last reported offline?", "How much of the period did we observe?", "Can we show a return on investment?", "How would user feedback change the conversation?"])
+        if question == "Where should we focus first?":
+            actions=decision_actions(ctx)
+            c.answer("Start here",actions[0]["title"],actions[0]["action"],"forest")
+            finding_rows(ctx["issues"].drop_duplicates("Room key"), "ask_priority", 3)
+            st.page_link("pages/Insights.py",label="Open the improvement opportunities",icon=":material/arrow_forward:")
+        elif question == "Which rooms may be oversized?":
+            found=ctx["issues"][ctx["issues"].Kind.eq("fit")]
+            c.answer("Room fit",f"{found['Room key'].nunique()} rooms meet the room-fit review rules.","Check peaks, room purpose and bookings before changing capacity.","rain")
+            finding_rows(found, "ask_fit")
+            st.page_link("pages/Scenarios.py",label="Test an alternative layout",icon=":material/compare_arrows:")
         elif question == "Where should facilities investigate?": finding_rows(ctx["issues"][ctx["issues"].Kind.isin(["warm", "light"])], "ask_facilities")
         elif question == "Which rooms were last reported offline?":
             offline = ctx["inventory"][ctx["inventory"]["Device Status"].eq("Offline")]
             if offline.empty: st.write("No rooms were reported offline in their latest selected record.")
             else: st.dataframe(offline[["Room Name", "Location", "Timestamp", "Device Status"]], hide_index=True, width="stretch")
             st.caption("Unknown states are not counted as online. Review Operations for the full snapshot.")
+        elif question == "Can we show a return on investment?":
+            c.answer("The honest answer","You can model a return. It is not yet a measured outcome.","Pulse supplies room-use evidence. A financial case also needs project cost, cash savings and ongoing cost assumptions, followed by verification.","sunrise")
+            st.page_link("pages/Value.py",label="Build the investment case",icon=":material/finance_mode:")
+        elif question == "How would user feedback change the conversation?":
+            c.experience_bridge(ctx)
         else:
             s = ctx["summary"]
             st.write(f"**{u.fmt(s['coverage'], '%')}** occupancy observation coverage: {s['valid_hours']:,.1f} valid room-hours out of {s['expected_hours']:,.1f} scheduled room-hours.")
             st.write("Missing samples, missing occupancy and offline or unknown device states reduce coverage. They do not become empty-room time.")
             st.dataframe(ctx["stats"][["Room Name", "Location", "Observed hours", "Coverage %"]].round(1), hide_index=True, width="stretch")
+    st.caption("Guided answers use the dashboard's calculations. This is not a connected AI chat service.")
     u.footer()

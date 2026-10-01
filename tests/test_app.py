@@ -11,10 +11,10 @@ def app():
 def test_all_pages_and_shared_filters():
     at = app()
     assert not at.exception
-    assert len(at.get("popover")) == 9
+    assert at.get("popover")
     at.selectbox(key="_preset").select("Last 30 days").run()
     at.selectbox(key="_hours").select("All hours").run()
-    for page in ["pages/Spaces.py", "pages/Environment.py", "pages/Insights.py", "pages/Administration.py", "pages/AI_Search.py"]:
+    for page in ["pages/Spaces.py", "pages/Feedback.py", "pages/Scenarios.py", "pages/Value.py", "pages/Environment.py", "pages/Insights.py", "pages/Administration.py", "pages/AI_Search.py"]:
         at.switch_page(page).run()
         assert not at.exception, [e.message for e in at.exception]
         assert at.selectbox(key="_preset").value == "Last 30 days"

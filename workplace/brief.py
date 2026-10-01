@@ -64,7 +64,7 @@ def pdf_brief(ctx):
         item.drawOn(pdf, x, top-h)
         return top-h
 
-    paragraph("neat.", margin, height-30, 100, 27)
+    paragraph("Neat", margin, height-30, 100, 27)
     paragraph("WORKPLACE / DECISION BRIEF", width-254, height-38, 220, 8, True, muted)
     paragraph("Your workplace. Next steps.", margin, 773, inner, 23, True)
     locations = ", ".join(sorted(ctx["inventory"].Location.unique()))
@@ -96,7 +96,7 @@ def pdf_brief(ctx):
         paragraph(detail, x+10, 566, metric_width-20, 7.6, colour=muted)
 
     paragraph("Decisions to explore", margin, 539, inner, 15, True)
-    paragraph("Data readiness first; room candidates ordered by evidence hours, not financial return.",
+    paragraph("Data readiness first; then distinct room-fit, temperature and lighting decisions.",
               margin, 519, inner, 8, colour=muted)
     top = 501
     for i, action in enumerate(decision_actions(ctx)):

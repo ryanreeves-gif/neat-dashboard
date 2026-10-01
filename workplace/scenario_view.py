@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from workplace import analytics as a, ui as u, visuals as v
+from workplace import analytics as a, ui as u, visuals as v, customer as c
 from workplace.scenarios import ASSUMPTIONS, attendance_bands, evaluate_layout, export_comparison, room_evidence
 from workplace.views import choose_room, csv_download
 from workplace.peer_view import automatic_peer
@@ -83,7 +83,7 @@ def result_card(label, result, baseline, colour, currency, occupied_hours):
 
 
 def scenarios():
-    u.shell("Scenarios", "Explore a different room mix.", "Compare today's room with two possible layouts, using the same observed attendance.")
+    u.shell("Scenarios", "Test the change before you build it.", "Compare attendance fit and project cost for alternative room layouts.")
     v.styles()
     st.html(CSS)
     ctx = u.context(show_evidence=False)
@@ -95,7 +95,6 @@ def scenarios():
         u.footer()
         return
     capacity = int(capacity)
-    automatic_peer(ctx, room)
     evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
     st.html('<div class="scenario-observed">' + "".join(
         f'<div><strong>{number(value, suffix, digits)}</strong><span>{label}</span></div>' for value, suffix, digits, label in [
@@ -125,11 +124,20 @@ def scenarios():
     baseline = evaluate_layout(evidence, [capacity], 0.0)
     layouts = [("Current", baseline), ("Option A", evaluate_layout(evidence, first, cost_a)),
                ("Option B", evaluate_layout(evidence, second, cost_b))]
+    c.answer("The planning decision", "How much observed demand would each layout accommodate?",
+             "Fit is the first check. Confirm the physical layout, peak demand and room purpose, then take an entered project cost into the investment model.","rain")
     st.subheader("How much of the observed attendance would fit?")
     st.caption("Every recorded count is treated as one group. For a two-room option, the group must fit in one of the rooms.")
     for column, (label, result), colour in zip(st.columns(3, gap="medium"), layouts, ["current", "option-a", "option-b"]):
         with column:
             result_card(label, result, baseline, colour, currency, evidence["occupied_hours"])
+            if label != "Current":
+                if st.button("Model this investment",key="scenario_value_"+label,width="stretch",disabled=result["project_cost"] is None,
+                             help="Enter an estimated project cost above to carry it into Value & ROI."):
+                    st.session_state["value_currency"]=currency
+                    st.session_state[f"value_{token}_{currency}_project"]=float(result["project_cost"])
+                    st.session_state[f"value_{token}_{currency}_example"]=False
+                    st.switch_page("pages/Value.py")
     st.caption("Fit is a share of observed occupied time, not a percentage of meetings or a prediction of future use. A second room's additional demand is not measured.")
 
     with st.container(key="panel_scenario_attendance"):
@@ -149,6 +157,8 @@ def scenarios():
         for assumption in ASSUMPTIONS:
             st.write("• " + assumption)
         st.caption("Options are remembered per room during this session. Currency changes select a separate entered cost; no conversion is performed.")
+    with st.expander("Benchmark against a similarly sized room"):
+        automatic_peer(ctx, room)
     csv_download(export_comparison(ctx, room, evidence, layouts, currency),
                  "Download scenario comparison", "neat-room-scenarios.csv", "scenario_export")
     st.caption("Download includes the selected room, dates, hours, costs, coverage and assumptions. No changes are made to room settings.")

@@ -32,14 +32,15 @@ The feed is cached for ten minutes. Sidebar → Data source → Refresh observat
 
 ## Experience
 
-- **Overview:** four outcome measures, a weekday demand heatmap, one room-fit example and three rooms to investigate.
+- **Overview:** a plain-language takeaway, occupied/empty/unknown time, demand patterns, sample sentiment and a short decision brief.
 - **Spaces:** automatic comparison with a similarly sized room, attendance versus capacity, individual histories and downloadable observations.
 - **Scenarios:** current capacity alongside two editable room layouts, optional project costs and a downloadable comparison. Open from the sidebar or Spaces → Compare alternative layouts.
 - **Feedback:** clearly labelled synthetic employee and customer/guest results across the room feed's history, audience/date/room filters, exports and an interactive portrait survey.
 - **Frame:** a standalone portrait survey demonstration, opened from Feedback. The `room` query parameter identifies its room; submissions remain in the browser's Streamlit session.
-- **Environment:** temperature, humidity, light and VOC trends, plus environmental evidence.
-- **Insights:** all qualifying findings with owners, evidence and next steps.
-- **Operations:** latest selected room status and a downloadable draft facilities handoff.
+- **Environment:** recurring conditions, sensor trends, facilities investigation candidates and the simulated action workflow.
+- **Opportunities (Insights route):** room-mix, temperature and lighting themes, with evidence, owners and next steps.
+- **Value & ROI:** room-specific entered annual costs, cash-flow projection, ROI, payback and savings sensitivity. No automatic financial claims are derived from Pulse or sample sentiment.
+- **Operations:** visual room-status cards, records to check, platform mix and a downloadable draft facilities handoff.
 - **Ask the data:** a guided set of questions using the same calculations; no simulated AI reasoning.
 
 Each headline metric and section has a native Streamlit info popover. Hover provides a hint; click opens meaning, business value, calculation and limitations. Click outside dismisses the panel. The native button also supports keyboard use. Shared selections persist as you move between pages.
@@ -54,7 +55,7 @@ Each headline metric and section has a native Streamlit info popover. Hover prov
 | Observation coverage | Valid occupancy room-hours ÷ scheduled room-hours across rooms in scope. |
 | Room fit | Time-weighted attendance and P90 compared with recorded capacity. A candidate requires ≥2 occupied hours, ≥4 seats and P90 ≤ half capacity. |
 | Warm / bright empty | Valid zero occupancy at the same time as temperature >22°C or illuminance >50 lux, for ≥1 observed hour. These are adjustable investigation thresholds. |
-| Rooms to review | Unique rooms with one or more qualifying findings. Overview shows one finding per room, ordered by evidence hours. |
+| Rooms to review | Unique rooms with one or more qualifying findings. Overview checks data readiness, then covers distinct room-fit, temperature and lighting decisions with one finding per room. The longest evidence within each theme is considered first. |
 
 Each sample represents time until the next sample, capped at the median observed sampling cadence for its room (1–30 minutes; 10-minute fallback). This handles the source's historical 15-minute and recent 10-minute collection, but remains an estimate between readings. Gaps, missing occupancy, offline states and unknown states do not become empty-room time. Hours are clipped to the selected dates and, by default, weekdays 08:00–19:00. Heatmap intervals split at hour boundaries so they reconcile with totals.
 
@@ -72,7 +73,26 @@ Spaces and Scenarios automatically select a capacity peer from London EC or Oslo
 
 The scenario page replays one room's observed occupied time against proposed capacities. Each people count is treated as one group that must fit in one room. Two four-seat rooms therefore cannot accommodate an observed count of six in this model. Empty time, gaps and offline data are excluded from the fit denominator. The largest proposed room sets the capacity threshold; additional room use, concurrent demand and future utilisation are not predicted.
 
-Options and costs are remembered per room during the browser session. Costs are optional user-entered totals, with separate values for GBP, EUR and NOK; changing currency does not convert a cost. No savings or payback is inferred. The export includes the room, selected dates/hours, data coverage, costs and assumptions. Validate dimensions, bookings, peak demand, accessibility, acoustics and AV requirements before adopting a layout.
+Options and costs are remembered per room during the browser session. Costs are optional user-entered totals, with separate values for GBP, EUR and NOK; changing currency does not convert a cost. No savings or payback is inferred. An entered Option A/B project cost can be carried to Value & ROI, where savings and additional running costs require separate assumptions. The export includes the room, selected dates/hours, data coverage, costs and assumptions. Validate dimensions, bookings, peak demand, accessibility, acoustics and AV requirements before adopting a layout.
+
+### Value & ROI
+
+The annual room-cost profile requires explicit property, technology/licensing and facilities/support inputs. Blank means unknown; zero is accepted as an explicit amount. Avoid overlapping categories and use an annualised equipment cost consistently. An optional, explicitly acknowledged allocation maps that annual total to occupied, observed-empty and unknown shares of the selected scheduled period. It assumes a representative annual pattern, retains missing time and never calls allocated empty-room cost a recoverable saving.
+
+The project model is separate from that cost profile:
+- Annual net cash benefit = expected annual cash savings minus additional annual running costs.
+- Horizon net benefit = annual net benefit × assessment years minus initial project cost.
+- ROI = horizon net benefit ÷ initial project cost × 100. A zero initial cost gives undefined ROI, not infinity.
+- Simple payback = initial cost ÷ positive annual net benefit × 12 months; no payback is shown when net benefit is zero or negative.
+- Sensitivity lines apply 50%, 100% and 125% to savings only, retaining the same project and additional running costs.
+
+The model is undiscounted and omits tax, inflation, residual value and staged savings. Its results are projections from entered assumptions, not verified financial returns. Inputs remain per room and currency during the session. The illustrative preset is opt-in, labelled and editable, and does not represent Neat prices. The export retains assumptions, calculation horizon, telemetry scope, evidence coverage and source labels. Sample sentiment never enters a financial calculation.
+
+### Customer story and visual system
+
+The navigation follows Understand → Improve → Operate. Every page has a stated customer purpose, a leading answer or decision, graphical evidence and a practical next step. Technical details and long tables use expandable sections. Keep Pulse observations, invented sentiment and entered financial assumptions distinct at the point of use. The Feedback relationship chart combines actual room-use values with explicitly synthetic ratings solely to demonstrate a future live workflow.
+
+Use Neat's September 2025 partner palette: restrained purple `#5F259F`, neutral backgrounds, Rain `#93ABB3`, Forest `#638C7D`, Sunrise `#DBC684`, Oak `#D5B68F`, Sunset `#D69B8C` and Walnut `#9F8884`. Retain the supplied wordmark and established Maison Neue font from the existing Neat-led experience. Purpose and legibility take priority over decoration. The one-page brief remains an evidence/investigation brief; business-case assumptions have a separate export.
 
 ### Feedback demonstration and path to a live pilot
 

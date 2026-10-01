@@ -26,24 +26,27 @@ def brand_css():
     return f"""<style>
     @font-face{{font-family:MaisonNeue;src:url(data:font/woff2;base64,{book}) format('woff2');font-weight:400;font-display:swap;}}
     @font-face{{font-family:MaisonNeue;src:url(data:font/woff2;base64,{bold}) format('woff2');font-weight:700;font-display:swap;}}
-    </style>""" + (ROOT / "assets/theme.css").read_text()
+    </style>""" + (ROOT / "assets/theme.css").read_text() + (ROOT / "assets/customer.css").read_text()
 
 
 def shell(active, title, subtitle):
+    from workplace.customer import PURPOSE
     st.set_page_config(page_title=f"Neat | {active}", page_icon=str(ROOT / "assets/neat-logo.svg"), layout="wide")
     st.html(brand_css())
     with st.sidebar:
         logo = base64.b64encode((ROOT / "assets/neat-logo.svg").read_bytes()).decode()
         st.html(f'<div class="brand"><img src="data:image/svg+xml;base64,{logo}" alt="Neat"/><p>Workplace intelligence</p></div>')
-        for path, label, icon in [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
-                                  ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
-                                  ("pages/Feedback.py", "Feedback", "sentiment_satisfied"),
-                                  ("pages/Environment.py", "Environment", "thermostat"), ("pages/Insights.py", "Insights", "insights")]:
-            st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
-        st.html('<div class="nav-separator"></div>')
-        st.page_link("pages/Administration.py", label="Operations", icon=":material/tune:", width="stretch")
-        st.page_link("pages/AI_Search.py", label="Ask the data", icon=":material/search:", width="stretch")
-        st.html('<div class="sidebar-note">Sensor evidence.<br>Better workplace decisions.</div>')
+        groups = [
+            ("Understand", [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
+                            ("pages/Feedback.py", "Feedback", "sentiment_satisfied"), ("pages/Environment.py", "Environment", "thermostat")]),
+            ("Improve", [("pages/Insights.py", "Opportunities", "insights"), ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
+                         ("pages/Value.py", "Value & ROI", "finance_mode")]),
+            ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
+        for group, links in groups:
+            st.html(f'<div class="nav-group">{group}</div>')
+            for path, label, icon in links:
+                st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
+        st.html('<div class="sidebar-note">Understand your spaces.<br>Invest with purpose.</div>')
         with st.expander("Data source"):
             st.caption("Published telemetry CSV · cached for 10 minutes")
             st.toggle("Use demonstration data", **field_state("demo_mode", False))
@@ -51,7 +54,7 @@ def shell(active, title, subtitle):
                 fetch.clear()
                 analysis.clear()
                 st.rerun()
-    st.html(f'<div class="eyebrow">WORKPLACE / {escape(active.upper())}</div><h1 class="hero">{escape(title)}</h1><p class="subtitle">{escape(subtitle)}</p>')
+    st.html(f'<div class="eyebrow">{escape(active.upper())} / {escape(PURPOSE.get(active, "").upper())}</div><h1 class="hero">{escape(title)}</h1><p class="subtitle">{escape(subtitle)}</p>')
 
 
 def explain(key, widget_key=None):
@@ -215,15 +218,10 @@ def evidence_banner(ctx):
     details = "Generated sample data — not customer evidence." if ctx["demo"] else "Missing readings stay unknown. Coverage measures completeness, not accuracy."
     if q["status_unreported"]:
         details += " Some source records do not report device status."
-    st.html(f'''<section class="evidence-banner evidence-{escape(q['tone'])}" aria-label="Evidence quality summary">
-      <div class="evidence-heading">{escape(q['label'])}</div>
-      <div class="evidence-grid">
-        <div><strong>{fmt(q['coverage'], '%')} observed</strong><span>{s['valid_hours']:,.1f} / {s['expected_hours']:,.1f} scheduled room-hours</span></div>
-        <div><strong>{q['rooms_ready']} of {q['rooms_total']} rooms at 70%+</strong><span>Review threshold · not an accuracy score</span></div>
-        <div><strong>{escape(latest)}</strong><span>Latest source reading for selected rooms · source clock</span></div>
-      </div>
-      <div class="evidence-note">{escape(details)}</div>
-    </section>''')
+    st.html(f'''<section class="evidence-compact {escape(q['tone'])}" aria-label="Evidence quality summary">
+      <span><i class="evidence-dot"></i><strong>{escape(q['label'])}</strong> · {q['rooms_ready']}/{q['rooms_total']} rooms at 70%+ coverage</span>
+      <span>Latest source: {escape(latest)} · source clock</span>
+      <span>{escape(details)}</span></section>''')
 
 
 def plot_style(fig, height=300):
@@ -246,4 +244,4 @@ def go_scenario(room_key):
 
 
 def footer():
-    st.html('<div class="page-footer">Neat Pulse sensor evidence · Observations and investigation opportunities · Building controls and bookings are not connected.</div>')
+    st.html('<div class="page-footer">Neat workplace intelligence · Pulse observations + labelled sample sentiment · Financial models use entered assumptions. Building controls, bookings and live surveys are not connected.</div>')
