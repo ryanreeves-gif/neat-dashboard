@@ -389,65 +389,107 @@ def simulation_config(ctx, room, kind, signal):
 
 
 def action(ctx, case):
+    from workplace.control_demo import KINDS, scenario, animation_html
+    import streamlit.components.v1 as components
+
     left, right = st.columns([1.3, 1], gap="medium", vertical_alignment="center")
     with left:
         room = room_picker(ctx)
     with right:
-        kind = st.selectbox("Condition to investigate", ["warm", "light"],
-                            format_func=lambda k: "Temperature while empty" if k == "warm" else "Light while empty",
+        kind = st.selectbox("Control to simulate", list(KINDS), format_func=KINDS.get,
                             label_visibility="collapsed", **u.field_state("brief_condition", "warm"))
     signal = action_signal(ctx, room, kind)
-    takeaway("Review the controls, then test a time-limited change." if signal else "Build the evidence before automating a change.",
-             "Facilities confirms vacancy, bookings and operating limits. A pilot checks actual energy use and the experience afterwards." if signal else "No finding passes the current evidence rules for this room and condition. Adjust the scope or investigate reporting first.", not bool(signal))
-    cols = st.columns([1, 1.35, 1], gap="medium")
+    row = ctx["inventory"].set_index("Room key").loc[room]
+    html('<div class="brief-demo-banner"><b>Interactive simulation:</b> adjust the controls and watch the room respond. Settings, response timing and outcomes are illustrative. No commands are sent.</div>')
+    cols = st.columns([.85, 1, 1.6], gap="medium")
     with cols[0], st.container(key="brief_panel_signal"):
-        heading("01 · Spot the opportunity")
-        hours = u.fmt(signal["Evidence hours"], digits=1) if signal else "—"
-        html(f'<div class="brief-evidence-number">{hours}<small> h</small></div>')
-        threshold = f"{ctx['thresholds']['warm']:g} °C" if kind == "warm" else f"{ctx['thresholds']['bright']:g} lux"
-        html(f'<div class="brief-small"><b>Observed empty time above {threshold}</b><br>{escape(room)}</div>')
-        html('<div class="brief-device"><b>Investigate, then act.</b>Temperature and light readings do not establish equipment operation or energy consumption.</div>')
-    config = simulation_config(ctx, room, kind, signal)
-    signature = json.dumps(config, sort_keys=True)
-    result = st.session_state.get("brief_workflow")
-    completed = bool(result and result["signature"] == signature)
-    with cols[1], st.container(key="brief_panel_workflow"):
-        heading("02 · Connect the response", "Control workflow demonstration · no live commands")
-        if st.button("Replay the simulated workflow", key="brief_run", type="primary", width="stretch", disabled=not bool(signal)):
-            st.session_state["brief_workflow"] = {"signature": signature, "payload": {**config,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "stages": ["Observation attached", "Simulated policy review", "Simulated temporary override", "Verification would be required"]}}
-            completed = True
-        steps([
-            ("Observe · Pulse reporting feed", "Attach the selected room's historical evidence."),
-            ("Review · ServiceNow workflow", "Would check current vacancy, bookings and policy."),
-            ("Act · building controls gateway", "Would request a 15-minute " + ("HVAC standby override." if kind == "warm" else "lighting override.")),
-            ("Verify · close the loop", "Would check actual state, energy and fresh feedback."),
-        ], completed)
-        html('<div class="brief-small"><b>' + ("Simulation replayed. No command sent or saving measured." if completed else "A configured integration and site approval would be needed for a live pilot.") + '</b></div>')
-    with cols[2], st.container(key="brief_panel_value"):
-        heading("03 · Prove the value")
-        if case:
-            html(f'<div class="brief-source assumption">{"ILLUSTRATIVE" if case["example"] else "ENTERED"} FINANCIAL ASSUMPTIONS</div>'
-                 f'<div class="brief-evidence-number" style="color:#5F259F;font-size:34px">{money(case["annual_net"], case["currency"])}</div>'
-                 f'<div class="brief-small">Annual net benefit · {escape(case["room"])}</div>')
-            payback = "No payback" if case["payback_months"] is None else f"{case['payback_months']:.1f} months"
-            html(f'<div class="brief-device"><b>{escape(payback)} simple payback</b>{money(case["project_cost"], case["currency"])} initial investment · {money(case["net_benefit"], case["currency"])} {case["years"]}-year net benefit.</div>')
-            html('<div class="brief-small">Separate planning case; the control simulation does not generate these savings.</div>')
+        heading("01 · Read the room")
+        sensor, label, unit = {"warm": ("Temperature", "Recorded temperature", "°C"),
+                               "light": ("Light Level", "Recorded light level", "lux"),
+                               "purge": ("VOC", "Recorded VOC", "source units")}[kind]
+        value = row.get(sensor)
+        html(f'<div class="brief-label">{label}</div><div class="brief-evidence-number" style="font-size:36px;margin:14px 0 5px">{u.fmt(value, digits=1)}<small> {unit}</small></div>'
+             f'<div class="brief-small">{"Sample sensor record" if ctx["demo"] else "Historical sensor record"}<br>{row.Timestamp:%d %b %Y, %H:%M}<br>{escape(str(row["Device Status"]))} · source clock</div>')
+        if signal:
+            html(f'<div class="brief-device"><b>{signal["Evidence hours"]:.1f} h of qualifying evidence</b>{escape(signal["Evidence"])}. Investigate actual operating state.</div>')
+        elif kind == "purge":
+            html('<div class="brief-device"><b>Explore a ventilation response</b>The demo air indicator starts at 100 relative units. It is invented and separate from the VOC reading.</div>')
         else:
-            html('<div class="brief-evidence-number" style="font-size:31px;color:#4C515C">Cost the pilot</div><div class="brief-small">Add costs and cash-saving assumptions, then compare the outcome with the baseline.</div>')
-            if st.button("Show illustrative savings", key="brief_show_savings", width="stretch"):
-                st.session_state["overview_example"] = True
-                st.rerun()
-        with st.popover("Pilot measures & assumptions", icon=":material/info:", width="stretch"):
-            st.write("Agree one room, a baseline period, facilities and IT owners, a budget and a review date. Compare actual metered energy/cost, room use, comfort and real employee/guest feedback before and after.")
-            st.write("For live control, commission room-to-zone mapping, permissions, interlocks, current vacancy and booking checks. Restore the normal schedule when the override expires or occupancy changes. Controller acknowledgement is not proof of savings.")
-            if case:
-                st.write(f"Annual savings {money(case['annual_savings'], case['currency'])} less extra annual cost {money(case['annual_extra_cost'], case['currency'])}. The model excludes discounting, tax, inflation and residual value.")
-                if case["payback_months"] is not None and case["payback_months"] > case["years"] * 12:
-                    st.caption("Payback falls beyond the assessment period.")
-            st.page_link("pages/Value.py", label="Open the full investment model", icon=":material/finance_mode:")
+            html('<div class="brief-device"><b>User-selected scenario</b>No qualified review signal for this selection. You can still explore the visual simulation.</div>')
+        with st.popover("Evidence & live-pilot checks", icon=":material/info:", width="stretch"):
+            st.write("The recorded value is a historical snapshot, not a live control reading. The simulation starts from separate, labelled assumptions. Room temperature is not the AC setpoint; lux is not a lighting-output percentage.")
+            st.write("VOC units need validating and this feed does not supply measured CO₂. The demo air indicator is not a health score or a forecast of pollutant removal.")
+            st.write("For a live pilot, validate room-to-zone mapping, actual occupancy and bookings, site permissions, comfort limits and the expiry/restore behaviour. Measure the real effect before reporting energy or satisfaction benefits.")
+        with st.popover("Business case", icon=":material/finance_mode:", width="stretch"):
+            pilot_finance(case)
+    with cols[1], st.container(key="brief_panel_workflow"):
+        heading("02 · Connect the response", "Choose an override, then run the simulation")
+        if kind == "warm":
+            temperature = st.slider("AC setpoint (°C)", 16.0, 28.0, step=.5,
+                                    **u.field_state("brief_ac_target", 21.0))
+        else:
+            temperature = 21.0
+        if kind == "light":
+            brightness = st.slider("Lighting output (%)", 0, 100, step=10,
+                                   **u.field_state("brief_light_target", 20))
+            st.caption("0% switches the demo lights off. 100% is full output.")
+        else:
+            brightness = 20
+        if kind == "purge":
+            boost = st.slider("Ventilation boost (%)", 20, 100, step=10,
+                              **u.field_state("brief_air_boost", 80))
+            st.caption("A timed air-purge scenario using an invented response curve.")
+        else:
+            boost = 80
+        duration = st.slider("Override duration (minutes)", 5, 60, step=5,
+                             **u.field_state("brief_control_minutes", 15))
+        with st.popover("Scenario starting values", icon=":material/tune:", width="stretch"):
+            start_temperature = st.number_input("Starting room temperature (demo °C)", min_value=10.0, max_value=40.0, step=.5,
+                                                **u.field_state("brief_start_temperature", 26.0))
+            st.caption("Assumed schedule: AC setpoint 24°C, lights 80%, ventilation 30%. The demo air indicator starts at 100. These values do not come from the room's controllers.")
+        settings = scenario(kind, duration, temperature, brightness, boost, start_temperature)
+        config = {**simulation_config(ctx, room, kind, signal), "settings": settings}
+        signature = json.dumps(config, sort_keys=True)
+        result = st.session_state.get("brief_workflow")
+        if result and result["signature"] != signature:
+            st.session_state.pop("brief_workflow", None)
+            result = None
+        if st.button("Run simulation", key="brief_run", type="primary", width="stretch"):
+            result = {"signature": signature, "payload": {**config, "created_at": datetime.now(timezone.utc).isoformat(),
+                      "stages": ["Demo request", "Simulated review", "Simulated override", "Assumed schedule restored"]}}
+            st.session_state["brief_workflow"] = result
+        if st.button("Reset simulation", key="brief_reset", width="stretch", disabled=result is None):
+            st.session_state.pop("brief_workflow", None)
+            result = None
+        html('<div class="brief-small"><b>Watch the room change</b><br>Pause the animation or move its timeline to inspect the override. At expiry, the assumed control schedule is restored.</div>')
+        with st.popover("What would connect in practice?", icon=":material/hub:", width="stretch"):
+            steps([("Pulse · room evidence", "Provides the observation and room identity."),
+                   ("ServiceNow · reviewed request", "Would validate policy, vacancy and the selected settings."),
+                   ("BMS gateway · temporary override", "Would apply a permitted command and return acknowledgement."),
+                   ("Verify · measured response", "Would check actual conditions, comfort and energy use.")])
+            st.caption("All four steps are represented locally. No ServiceNow ticket or BMS acknowledgement is real.")
+    with cols[2], st.container(key="brief_panel_control_preview"):
+        heading("03 · See the response", "Play, pause or scrub the simulated timeline")
+        components.html(animation_html(settings, row["Room Name"], result["payload"]["created_at"] if result else None),
+                        height=505, scrolling=False)
 
+
+def pilot_finance(case):
+    heading("Prove the value")
+    if case:
+        html(f'<div class="brief-source assumption">{"ILLUSTRATIVE" if case["example"] else "ENTERED"} FINANCIAL ASSUMPTIONS</div>'
+             f'<div class="brief-evidence-number" style="color:#5F259F;font-size:30px">{money(case["annual_net"], case["currency"])}</div>'
+             f'<div class="brief-small">Annual net benefit · {escape(case["room"])}</div>')
+        payback = "No payback" if case["payback_months"] is None else f"{case['payback_months']:.1f} months"
+        st.write(f"{payback} simple payback. {money(case['project_cost'], case['currency'])} initial investment; {money(case['net_benefit'], case['currency'])} {case['years']}-year net benefit.")
+        st.caption("Separate planning assumptions. The control simulation does not generate these savings.")
+    else:
+        st.write("Add project costs and cash-saving assumptions, then compare measured outcomes with the baseline.")
+        if st.button("Show illustrative savings", key="brief_show_savings", width="stretch"):
+            st.session_state["overview_example"] = True
+            st.rerun()
+    st.page_link("pages/Value.py", label="Open the full investment model", icon=":material/finance_mode:")
+    st.caption("Agree a room, facilities and IT owners, a baseline, a budget and a review date. Assess use, comfort, real feedback and metered energy/cost before and after.")
 
 def run(active):
     index = next(i for i, row in enumerate(CHAPTERS) if row[0] == active)

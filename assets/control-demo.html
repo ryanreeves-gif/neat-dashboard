@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+@font-face{font-family:MaisonNeue;src:url(data:font/woff2;base64,__FONT__) format('woff2');font-weight:400}@font-face{font-family:MaisonNeue;src:url(data:font/woff2;base64,__BOLD_FONT__) format('woff2');font-weight:700}#roomLight,#lightRays,#bulbs{transition:opacity .25s linear}*{box-sizing:border-box}body{margin:0;color:#33353C;font-family:MaisonNeue,Arial,sans-serif;font-size:12px;background:white}.tag{font-size:9px;letter-spacing:.6px;color:#5F259F;font-weight:bold}.change{display:flex;align-items:center;justify-content:space-between;margin:7px 0 6px}.change strong{font-size:27px;font-weight:bold;white-space:nowrap}.change span{font-size:10px;line-height:1.35;color:#4C515C;max-width:150px;text-align:right}.scene{width:100%;height:178px;background:#F6F7F8;border-radius:12px;display:block}.caption{display:flex;justify-content:space-between;gap:10px;font-size:11px;margin:8px 0}.caption b{color:#5F259F}.status{background:#EAF0ED;border-radius:8px;padding:8px 10px;min-height:45px;font-size:11px;line-height:1.4;margin:8px 0}.status b{display:block;color:#33353C}.timeline{display:flex;gap:5px;margin:10px 0 7px}.timeline span{flex:1;text-align:center;font-size:9px;padding:6px 2px;border-radius:6px;background:#ECEFF0;color:#4C515C}.timeline .done{background:#EAF0ED;color:#436454}.timeline .active{background:#5F259F;color:white}input[type=range]{width:100%;accent-color:#5F259F;cursor:pointer;margin:4px 0}label{display:flex;justify-content:space-between;font-size:10px}.actions{display:flex;gap:8px;margin:7px 0}.actions button{background:white;border:1px solid #CBD2D5;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer;flex:1}.actions button:disabled{opacity:.45;cursor:default}.note{font-size:9px;line-height:1.35;color:#69717D}.air-stream{stroke-dasharray:8 8;animation:flow 1s linear infinite}.rotor{transform-origin:315px 43px;animation:spin 2s linear infinite}body.paused .rotor,body.paused .air-stream{animation-play-state:paused}@keyframes flow{to{stroke-dashoffset:-32}}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.air-stream,.rotor{animation:none}}
+</style></head><body class="paused">
+<div class="tag">ILLUSTRATIVE CONTROL RESPONSE · NO LIVE CONNECTION</div>
+<div class="change"><strong id="change"></strong><span id="changeLabel"></span></div>
+<svg class="scene" viewBox="0 0 400 190" role="img" aria-label="Illustrative room showing lighting, temperature and ventilation changes">
+<rect x="22" y="20" width="356" height="152" rx="15" fill="#ECEFF0" stroke="#CCD5D6"/><rect id="roomLight" x="25" y="23" width="350" height="146" rx="12" fill="#FFF4C9" opacity=".35"/>
+<path d="M22 127H378" stroke="#C8D0D3"/><rect x="153" y="34" width="87" height="46" rx="5" fill="#33353C"/><rect x="159" y="40" width="75" height="33" rx="2" fill="#93ABB3"/><circle cx="196" cy="36" r="1.5" fill="#D5B68F"/>
+<ellipse cx="188" cy="140" rx="75" ry="15" fill="#C8D0D3"/><rect x="111" y="99" width="154" height="39" rx="19" fill="white" stroke="#C8D0D3"/>
+<g fill="#638C7D"><rect x="130" y="87" width="24" height="10" rx="5"/><rect x="177" y="87" width="24" height="10" rx="5"/><rect x="224" y="87" width="24" height="10" rx="5"/><rect x="130" y="141" width="24" height="10" rx="5"/><rect x="177" y="141" width="24" height="10" rx="5"/><rect x="224" y="141" width="24" height="10" rx="5"/></g>
+<g id="bulbs" fill="#DBC684"><rect x="62" y="26" width="40" height="7" rx="3"/><rect x="265" y="26" width="30" height="7" rx="3"/></g>
+<g id="lightRays" fill="#DBC684" opacity=".25"><path d="M64 33L47 88H117L100 33Z"/><path d="M266 33L256 84H311L294 33Z"/></g>
+<rect x="300" y="31" width="54" height="25" rx="5" fill="white" stroke="#93ABB3"/>
+<g class="rotor" id="fan" stroke="#638C7D" stroke-width="3" stroke-linecap="round"><path d="M315 36V50M308 43H322"/></g><path d="M329 38H346M329 44H346M329 50H346" stroke="#93ABB3" stroke-width="2"/>
+<g id="airflow" fill="none" stroke="#638C7D" stroke-width="2" opacity=".2"><path class="air-stream" d="M318 60Q340 82 310 97Q295 108 320 122"/><path class="air-stream" d="M334 60Q354 86 328 100Q312 115 344 137"/></g>
+<g id="particles" fill="#9F8884"><circle cx="66" cy="82" r="3"/><circle cx="91" cy="108" r="2"/><circle cx="283" cy="74" r="3"/><circle cx="290" cy="149" r="2"/><circle cx="351" cy="103" r="3"/><circle cx="52" cy="142" r="2"/><circle cx="267" cy="60" r="2"/><circle cx="340" cy="147" r="3"/></g>
+<rect x="50" y="96" width="32" height="55" rx="7" fill="white" stroke="#93ABB3"/><rect x="63" y="103" width="6" height="30" rx="3" fill="#E2E7E9"/><rect id="thermometer" x="63" y="112" width="6" height="21" rx="3" fill="#D69B8C"/><circle cx="66" cy="136" r="6" fill="#D69B8C"/>
+<text id="roomName" x="199" y="166" text-anchor="middle" font-size="9" fill="#4C515C"></text>
+</svg>
+<div class="caption"><span id="setting"></span><b id="reading"></b></div>
+<div class="timeline"><span id="step0">1 · Request</span><span id="step1">2 · Review</span><span id="step2">3 · Apply</span><span id="step3">4 · Restore</span></div>
+<div class="status" aria-live="polite"><b id="statusTitle">Ready to simulate</b><span id="statusDetail">Adjust the settings, then select Run simulation.</span></div>
+<label for="scrub">Simulation timeline <span id="clock">0 min</span></label><input id="scrub" type="range" min="0" max="120" step="1" value="0" disabled>
+<div class="actions"><button id="pause" disabled>Pause</button><button id="replay" disabled>Replay</button></div>
+<div class="note">The animation compresses time. Starting controls, response curves and air indicator are invented; no sensor outcome, energy saving or health result is predicted.</div>
+<script type="application/json" id="config">__CONFIG__</script><script>
+const c=JSON.parse(document.getElementById('config').textContent);const $=id=>document.getElementById(id);let frame=0,playing=false,last=0,timer=null;
+$('roomName').textContent=c.room_name.length>44?c.room_name.slice(0,42)+'…':c.room_name;
+$('change').textContent=c.kind==='light'?`${c.baseline_light}% → ${c.brightness}%`:c.kind==='warm'?`${c.baseline_setpoint.toFixed(1)}° → ${c.temperature.toFixed(1)}°`:`${c.baseline_fan}% → ${c.boost}%`;
+$('changeLabel').textContent=c.kind==='light'?'Assumed lighting output → override':c.kind==='warm'?'Assumed AC setpoint → override':'Assumed ventilation output → boost';
+function show(i){frame=Math.max(0,Math.min(120,Math.round(i)));const s=c.frames[frame];$('scrub').value=frame;$('clock').textContent=`${s.minute.toFixed(1)} / ${c.duration} min`;
+$('roomLight').style.opacity=(s.light/100*.65).toFixed(2);$('lightRays').style.opacity=(s.light/100*.45).toFixed(2);$('bulbs').style.opacity=Math.max(.12,s.light/100);$('airflow').style.opacity=(s.fan/100).toFixed(2);$('fan').style.animationDuration=(3-s.fan/50)+'s';$('particles').style.opacity=c.kind==='purge'?s.air_indicator/100:.25;
+const h=Math.min(30,Math.max(3,(s.room_temperature-10)/30*30));$('thermometer').setAttribute('height',h);$('thermometer').setAttribute('y',133-h);
+$('setting').textContent=c.kind==='light'?`Demo lights: ${s.light}%`:c.kind==='warm'?`Demo setpoint: ${s.setpoint.toFixed(1)}°C`:`Demo ventilation: ${s.fan}%`;
+$('reading').textContent=c.kind==='light'?(s.light===0?'Lights off':`${s.light}% output`):c.kind==='warm'?`Demo room: ${s.room_temperature.toFixed(1)}°C`:`Demo air indicator: ${s.air_indicator.toFixed(0)}`;
+const stage=frame===0?0:frame<7?1:frame<120?2:3;for(let n=0;n<4;n++)$('step'+n).className=n<stage?'done':n===stage&&c.running?'active':'';
+if(!c.running){$('statusTitle').textContent='Ready to simulate';return;}
+$('statusTitle').textContent=frame===0?'Demo request prepared':stage===1?'Simulated review':s.expired?'Simulation finished · schedule restored':'Simulated override active';
+$('statusDetail').textContent=frame===0?'Room and selected settings attached.':stage===1?'ServiceNow policy and BMS acknowledgement are represented here, not connected.':s.expired?'Assumed control settings restored. Room conditions shown remain illustrative.':`${(c.duration-s.minute).toFixed(1)} simulated minutes until the normal schedule resumes.`;
+}
+function stop(){playing=false;if(timer)cancelAnimationFrame(timer);timer=null;document.body.classList.add('paused');$('pause').textContent='Play';}
+function tick(now){if(!playing)return;if(!last)last=now;const next=frame+(now-last)/1000*12;last=now;frame=next;show(Math.floor(next));/* retain fractional progress between frames */frame=next;if(next>=120){show(120);stop();return;}timer=requestAnimationFrame(tick);}
+function play(){if(frame>=120)frame=0;playing=true;last=0;document.body.classList.remove('paused');$('pause').textContent='Pause';timer=requestAnimationFrame(tick);}
+$('pause').onclick=()=>playing?stop():play();$('replay').onclick=()=>{stop();show(0);play();};$('scrub').oninput=e=>{stop();show(+e.target.value);};
+show(0);if(c.running){$('scrub').disabled=false;$('pause').disabled=false;$('replay').disabled=false;if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){show(60);$('pause').textContent='Play';}else play();}
+</script></body></html>
