@@ -499,7 +499,9 @@ def run(active):
         ctx = u.context(show_evidence=False, sidebar_details=True)
     case = finance_case(ctx)
     locations = ", ".join(sorted(ctx["inventory"].Location.unique()))
-    scope = f"{locations} · {ctx['start']:%d %b}–{ctx['end']:%d %b %Y} · {'Office hours' if ctx['office'] else 'All hours'} · {len(ctx['inventory'])} rooms"
+    # The analysis boundary can be midnight on the following day; show the
+    # inclusive calendar date selected in the filter instead.
+    scope = f"{locations} · {ctx['start']:%d %b}–{ctx['end_date']:%d %b %Y} · {'Office hours' if ctx['office'] else 'All hours'} · {len(ctx['inventory'])} rooms"
     html(f'<div class="brief-scope"><span>{escape(scope)}</span><b>{"DEMO telemetry" if ctx["demo"] else "Pulse observations"} · {u.fmt(ctx["summary"]["coverage"], "%")} coverage</b></div>')
     {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action}[active](ctx, case)
     endings = ["Approve one pilot. Measure what changes.", "Use observed demand to test the room mix.",

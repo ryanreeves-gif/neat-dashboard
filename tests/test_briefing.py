@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -32,6 +33,20 @@ def test_four_chapters_keep_scope_and_can_return_to_the_full_dashboard():
     assert not at.exception
     assert at.button(key="environment_run")
     assert at.selectbox(key="_preset").value == "Last 30 days"
+
+
+def test_completed_custom_dates_match_scope_label_across_chapters():
+    at = presentation()
+    at.selectbox(key="_preset").select("Custom dates").run()
+    initial = at.date_input(key="_custom_dates").value
+    selected = tuple(day - timedelta(days=1) for day in initial)
+    at.date_input(key="_custom_dates").set_value(selected).run()
+    for page in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
+        at.switch_page(page).run()
+        assert not at.exception, [e.message for e in at.exception]
+        assert at.date_input(key="_custom_dates").value == selected
+        scope = next(e.proto.body for e in at.get("html") if 'class="brief-scope"' in e.proto.body)
+        assert f"{selected[0]:%d %b}–{selected[1]:%d %b %Y}" in scope
 
 
 def test_finance_stays_opt_in_and_separate_from_control_simulation():

@@ -218,7 +218,7 @@ def context(show_evidence=True, compact=False, sidebar_details=False):
         st.stop()
     samples, inv, stats, summary, issues, previous = analysis(scope, fetched, room_keys, start, end, mode == "Office hours", warm, bright, minimum)
     ctx = dict(data=scope, all_data=data, samples=samples, inventory=inv, stats=stats, summary=summary, issues=issues, previous=previous,
-               start=start, end=end, office=mode == "Office hours", quality=quality, fetched=fetched,
+               start=start, end=end, end_date=end_date, office=mode == "Office hours", quality=quality, fetched=fetched,
                excluded=len(a.inventory(scope[scope.Timestamp <= end]))-len(inv), thresholds=dict(warm=warm, bright=bright, minimum=minimum),
                demo=bool(st.session_state.get("demo_mode", False)),
                latest_source=scope.loc[scope["Room key"].isin(room_keys), "Timestamp"].max())
