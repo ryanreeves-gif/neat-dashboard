@@ -49,7 +49,7 @@ def test_iframe_configuration_is_safe_data_and_only_runs_when_requested():
 
 
 def test_all_three_controls_capture_settings_invalidate_changes_and_reset():
-    at = presentation().switch_page('pages/Improve.py').run()
+    at = presentation().switch_page('pages/Environment.py').run()
     assert not at.exception, [e.message for e in at.exception]
     for kind, key, value in [('warm', '_brief_ac_target', 20.0),
                              ('light', '_brief_light_target', 0),

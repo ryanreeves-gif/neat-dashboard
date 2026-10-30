@@ -21,7 +21,7 @@ def test_four_chapters_keep_scope_and_can_return_to_the_full_dashboard():
     room = at.main.multiselect(key="_room_filter").options[0]
     at.main.multiselect(key="_room_filter").set_value([room]).run()
     at.main.selectbox(key="_preset").select("Last 30 days").run()
-    for page in ["pages/Environment.py", "pages/Feedback.py", "pages/Improve.py"]:
+    for page in ["pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
         at.switch_page(page).run()
         assert not at.exception, [e.message for e in at.exception]
         assert at.main.selectbox(key="_preset").value == "Last 30 days"
@@ -41,7 +41,7 @@ def test_completed_custom_dates_match_scope_label_across_chapters():
     initial = at.date_input(key="_custom_dates").value
     selected = tuple(day - timedelta(days=1) for day in initial)
     at.date_input(key="_custom_dates").set_value(selected).run()
-    for page in ["app.py", "pages/Environment.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Improve.py"]:
+    for page in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
         at.switch_page(page).run()
         assert not at.exception, [e.message for e in at.exception]
         assert at.date_input(key="_custom_dates").value == selected
@@ -50,7 +50,7 @@ def test_completed_custom_dates_match_scope_label_across_chapters():
 
 
 def test_finance_stays_opt_in_and_separate_from_control_simulation():
-    at = presentation().switch_page("pages/Improve.py").run()
+    at = presentation().switch_page("pages/Environment.py").run()
     assert not at.exception
     assert at.toggle(key="_overview_example").value is False
     at.toggle(key="_overview_example").set_value(True).run()
@@ -58,10 +58,10 @@ def test_finance_stays_opt_in_and_separate_from_control_simulation():
     assert at.toggle(key="_overview_example").value is True
     html = " ".join(e.proto.body for e in at.get("html"))
     assert "£7,500" not in html  # an illustration is not this room's forecast
-    at.switch_page("pages/Current_State.py").run()
+    at.switch_page("app.py").run()
     html = " ".join(e.proto.body for e in at.get("html"))
     assert "£7,500" in html and "Illustrative assumptions" in html
-    at.switch_page("pages/Improve.py").run()
+    at.switch_page("pages/Environment.py").run()
     at.button(key="brief_run").click().run()
     assert not at.exception
     run = at.session_state["brief_workflow"]
@@ -121,7 +121,7 @@ def test_companion_is_ready_on_entry_and_test_submission_stays_separate():
 def test_straight_story_keeps_room_context_and_layout_is_visible_on_entry():
     at = presentation()
     assert not at.exception
-    assert any("health-room-grid" in e.proto.body for e in at.get("html"))
+    assert at.get("plotly_chart")
     at.selectbox(key="_feedback_audience").select("Neat employee").run()
     room = at.session_state["selected_room"]
     assert not at.main.get("button_group")
@@ -134,7 +134,7 @@ def test_straight_story_keeps_room_context_and_layout_is_visible_on_entry():
     seats.set_value(1).run()
     assert not at.exception
     assert any("Smaller-room option · 1 seats" in e.proto.body for e in at.get("html"))
-    at.switch_page("pages/Improve.py").run()
+    at.switch_page("pages/Environment.py").run()
     assert not at.exception, [e.message for e in at.exception]
     assert at.selectbox(key="_selected_room").value == room
     assert at.session_state["feedback_audience"] == "Neat employee"

@@ -66,10 +66,10 @@ def test_customer_pilot_keeps_scope_and_does_not_fabricate_after_results():
     at.session_state["demo_mode"] = True
     at.run()
     at.toggle(key="_hold_observations").set_value(True).run()
-    at.switch_page("pages/Improve.py").run()
+    at.switch_page("pages/Environment.py").run()
     assert not at.exception, [e.message for e in at.exception]
     html = " ".join(e.proto.body for e in at.get("html"))
-    for phrase in ["Three practical next steps", "Measure", "Owner", "Held snapshot"]:
+    for phrase in ["RECOMMENDED FIRST STEP", "Check", "Try", "Measure", "Owner", "Held snapshot"]:
         assert phrase in html
     assert any("No measured pilot outcome" in caption.value for caption in at.caption)
     assert any("Financial return is still to quantify for this room" in item.value for item in at.markdown)
