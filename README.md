@@ -44,6 +44,14 @@ The app opens in **Presentation view**, a compact four-chapter executive briefin
 
 Presenter tools → Timing and talking points contains these cues. Each chapter has a next link. Use one room through the story, and retain deeper pages for questions. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
 
+### London office map
+
+Current state shows Ryan's office illustration when London EC is the sole selected location. The confirmed positions are A Barra, B Harris, C Edradour, D Dalmore Microsoft, E Longrow Lounge Board (source: Longrow Lounge Board 32), F Longrow, G Arran, H Wall o' Pads / Shelf o' Frames (one shared area, two source records), and I London Envoy Kiosk. Other rooms remain in the headline figures and the performance comparison under Presenter tools; their positions are not guessed. Oslo, multi-location and generated-demo views retain the previous comparison chart.
+
+Select a map marker or adjacent product label to see scoped room results and the existing recommended pilot. Room selections follow into Room fit, Experience and Improve. Display-area selections do not replace that room. The map's Usage, Temperature and Sample sentiment controls change only the displayed measure. Explicit room filters mute excluded markers. Equipment labels use the latest matching inventory record inside the date window, with repeated model counts preserved. Product presence does not imply current device availability, sign-in or booking availability. Unknown models retain their codes. The original supplied image is unchanged and is an illustration rather than a measured plan.
+
+Temperature averages use valid sensor intervals and the chosen operating hours, independently of occupancy coverage. Shared-area temperatures remain separate. Display areas are not assigned room capacity, usage or feedback; they are separate from the default meeting-room totals. Usage and sample-rating evidence gates remain unchanged. Sample ratings remain synthetic. No new physical control or live survey integration is added.
+
 The compact workflow reuses coverage-screened findings. A user can also explore a clearly labelled simulation without a qualifying signal; this does not authorise an intervention. Simulation results are tied to room, dates, hours, thresholds and evidence; changing that configuration removes the displayed result. No command is sent, no ServiceNow ticket is created and no saving is measured. The financial example is opt-in and independent of this control simulation.
 
 ### Webinar decision and reliability improvements

@@ -17,8 +17,9 @@ MODEL_NAMES = {
     "NF19A1": "Neat Pad", "NF19B1": "Neat Bar", "NF22E1": "Neat Bar 2",
     "NF21D1": "Neat Bar Pro", "NF20C1": "Neat Board", "NF23K1": "Neat Board Pro",
     "NF22H1": "Neat Board 50", "NF21F1": "Neat Frame", "NF25J1": "Neat Pad Pro",
+    "NF25A5": "Neat Pad Gen 2", "NF25M1": "Neat Board 32",
 }
-CONTROLLERS = {"NF19A1", "NF25J1"}
+CONTROLLERS = {"NF19A1", "NF25J1", "NF25A5"}
 
 
 def room_type(capacity):

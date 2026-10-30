@@ -143,28 +143,32 @@ def summary(ctx, case):
          case["room"] if case else "Scope and cost one pilot",
          "Illustrative assumptions" if case and case["example"] else "Entered assumptions" if case else "No measured cost or energy saving", "sunrise", not bool(case)),
     ])
-    left, right = st.columns([1.9, 1], gap="medium")
-    with left, st.container(key="brief_panel_portfolio"):
-        heading("Room use meets room experience", "Each bubble is a room · size reflects capacity · colour shows the review route")
-        plotted = p.comparison_rows(portfolio)
-        if plotted.empty:
-            st.info("No room has both enough occupancy evidence and five sample responses in this scope. The separate leaders can still be assessed independently.")
-        else:
-            fig = p.performance_figure(portfolio, ctx["summary"]["utilisation"], u.FONT)
-            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="brief_portfolio_plot")
-            html(f'<div class="brief-small">Showing {len(plotted)} of {len(portfolio)} rooms · rating detail: {fig.layout.meta["rating_axis_floor"]:g}–5 of 5. Dotted lines: estate use and a 4/5 rating. Sentiment is invented.</div>')
-    with right:
-        leader_card(portfolio, "usage")
-        leader_card(portfolio, "sentiment")
-        preferred_room(ctx)
-        plan = pilot_plan(ctx, st.session_state["selected_room"])
-        html(f'<article class="brief-recommendation"><div class="brief-label">RECOMMENDED NEXT STEP · {escape(plan["name"])}</div>'
-             f'<h3>{escape(plan["title"])}</h3>'
-             f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
+    from workplace import office_map
+    if office_map.applies(ctx):
+        office_map.render(ctx, portfolio)
+    else:
+        left, right = st.columns([1.9, 1], gap="medium")
+        with left, st.container(key="brief_panel_portfolio"):
+            heading("Room use meets room experience", "Each bubble is a room · size reflects capacity · colour shows the review route")
+            plotted = p.comparison_rows(portfolio)
+            if plotted.empty:
+                st.info("No room has both enough occupancy evidence and five sample responses in this scope. The separate leaders can still be assessed independently.")
+            else:
+                fig = p.performance_figure(portfolio, ctx["summary"]["utilisation"], u.FONT)
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="brief_portfolio_plot")
+                html(f'<div class="brief-small">Showing {len(plotted)} of {len(portfolio)} rooms · rating detail: {fig.layout.meta["rating_axis_floor"]:g}–5 of 5. Dotted lines: estate use and a 4/5 rating. Sentiment is invented.</div>')
+        with right:
+            leader_card(portfolio, "usage")
+            leader_card(portfolio, "sentiment")
+            preferred_room(ctx)
+            plan = pilot_plan(ctx, st.session_state["selected_room"])
+            html(f'<article class="brief-recommendation"><div class="brief-label">RECOMMENDED NEXT STEP · {escape(plan["name"])}</div>'
+                 f'<h3>{escape(plan["title"])}</h3>'
+                 f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
     with ctx["tools"].expander("Room evidence and methodology"):
         st.write("Usage leaders need positive capacity, at least 70% occupancy coverage and two observed hours. The estate percentage pools all valid observed hours. Missing time is unknown, not empty.")
         st.write("Sample sentiment leaders need at least five responses and are independent of telemetry coverage. Usage ties use one decimal place; sentiment ties use two. An audience filter changes ratings, never usage or improvement signals.")
-        st.write("The map only includes rooms passing both checks. Bubble sizes reflect recorded capacity; colour shows a possible review route. Reference lines are guides, not performance targets. Short periods and sample ratings cannot establish the best room design.")
+        st.write("The performance comparison chart only includes rooms passing both checks. Bubble sizes reflect recorded capacity; colour shows a possible review route. Reference lines are guides, not performance targets. Short periods and sample ratings cannot establish the best room design.")
         st.write("Controls reviews flag warm or bright empty-room observations. Lux cannot prove electric lights were on. Layout reviews flag rooms with two occupied hours and a 90th-percentile group no larger than half their capacity. Both routes require validation before action.")
         st.dataframe(portfolio[["Room key", "Utilisation %", "Coverage %", "Responses", "Sentiment", "Route"]], hide_index=True, width="stretch")
 
