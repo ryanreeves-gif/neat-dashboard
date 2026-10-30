@@ -129,7 +129,12 @@ def widget():
 def fit_rows(ctx):
     """Only scoped meeting rooms can drive the seat comparison."""
     from workplace.customer import feedback_in_scope
-    portfolio = p.room_portfolio(ctx, feedback_in_scope(ctx))
+    return meeting_rows(ctx, feedback_in_scope(ctx))
+
+
+def meeting_rows(ctx, records):
+    """Keep map ratings in the supplied audience/date scope, with no asset scores."""
+    portfolio = p.room_portfolio(ctx, records)
     rows = map_rows(ctx, portfolio, st.session_state.get("room_filter", ()))
     return [{**row, "allowed": row["allowed"] and row["key"] is not None}
             for row in rows if row["kind"] == "room"]
@@ -151,6 +156,24 @@ def render_fit(ctx, room):
     if selected is None:
         html(f'<div class="brief-small"><b>{escape(room.split(" / ", 1)[-1])}</b> has no confirmed map position. Its seat comparison is shown alongside.</div>')
     html('<div class="brief-small">Confirmed meeting-room positions only. Use the room menu for other rooms. Display areas are excluded from seat comparisons.</div>')
+
+
+def render_experience(ctx, records, room, audience):
+    from html import escape
+    from workplace.briefing import heading, html
+    rows = meeting_rows(ctx, records)
+    selected = next((r["id"] for r in rows if r["key"] == room and r["allowed"]), None)
+    heading("How each room feels", "Select a room to try its companion app.")
+
+    def picked():
+        event = st.session_state.get("office_experience_map_component", {})
+        choose_space(rows, event.get("picked"), st.session_state)
+
+    widget()(data={"image": picture(), "rows": rows, "selected": selected, "view": "experience"},
+             key="office_experience_map_component", on_picked_change=picked)
+    if selected is None:
+        html(f'<div class="brief-small"><b>{escape(room.split(" / ", 1)[-1])}</b> has no confirmed map position. Its companion is ready alongside.</div>')
+    html(f'<div class="brief-small">{escape(audience)} · dates and room filters apply. Use the room menu for spaces not positioned on the map.</div>')
 
 
 def render(ctx, portfolio):

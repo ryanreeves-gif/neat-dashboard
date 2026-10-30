@@ -1,21 +1,23 @@
 export default function(component) {
   const { data, parentElement, setTriggerValue } = component;
   const isFit = data.view === 'fit';
+  const isExperience = data.view === 'experience';
+  const isCompact = isFit || isExperience;
   // Streamlit can render new data into the same host before unmounting it.
   parentElement.querySelectorAll('.office-map-widget').forEach(previous => previous.remove());
   const root = document.createElement('section');
-  root.className = 'office-map-widget' + (isFit ? ' office-map-fit' : '');
+  root.className = 'office-map-widget' + (isCompact ? ' office-map-compact' : '') + (isFit ? ' office-map-fit' : '') + (isExperience ? ' office-map-experience' : '');
   root.setAttribute('aria-label', 'London office map and product labels');
   parentElement.appendChild(root);
   root.innerHTML = `<div class="map-toolbar" aria-label="Map measure"><button type="button" data-lens="usage" aria-pressed="true">Usage</button><button type="button" data-lens="temperature" aria-pressed="false">Temperature</button><button type="button" data-lens="rating" aria-pressed="false">Sentiment · sample</button></div><div class="map-grid"><div class="map-picture"><img alt="London office illustration with room positions confirmed by Ryan"><div class="map-pins"></div></div><div class="map-labels" aria-label="Spaces and Neat products"></div></div><div class="map-legend" aria-live="polite"></div>`;
   root.querySelector('img').src = data.image;
-  root.querySelector('.map-toolbar').hidden = isFit;
+  root.querySelector('.map-toolbar').hidden = isCompact;
   const pins = root.querySelector('.map-pins');
   const labels = root.querySelector('.map-labels');
   // Streamlit supplies a ShadowRoot when style isolation is enabled. Store
   // view state on its host element; a ShadowRoot itself has no dataset.
   const stateHost = parentElement.host || parentElement;
-  let lens = isFit ? 'usage' : stateHost.dataset.officeLens || 'usage';
+  let lens = isExperience ? 'rating' : isFit ? 'usage' : stateHost.dataset.officeLens || 'usage';
   let selected = data.selected;
   const products = row => row.products.map(p => p.name.replace(/^Neat /, '') + (p.count > 1 ? ' ×' + p.count : '')).join(' · ') || 'Products not reported';
   function value(row) {
@@ -53,6 +55,7 @@ export default function(component) {
     label.querySelector('b').textContent = row.name;
     label.querySelector('small').textContent = isFit
       ? (row.capacity === null ? 'No room data in scope' : row.capacity + ' seats')
+      : isExperience ? (row.rating === null ? '— · ' : row.rating.toFixed(2) + '/5 · ') + row.responses + ' samples'
       : products(row);
     label.title = row.name + ' · ' + products(row);
     label.onclick = () => select(row);
@@ -70,7 +73,7 @@ export default function(component) {
       pin.setAttribute('aria-label', row.name + ', ' + products(row) + ', ' + lens + ' ' + value(row));
       pin.title = row.name + ' · ' + products(row);
     });
-    root.querySelector('.map-legend').textContent = isFit ? 'Map percentages show time in use. Purple outlines mark the selected room; — means insufficient usage evidence.' : lens === 'usage' ? 'Time in use · — means no qualifying room-use evidence' : lens === 'temperature' ? 'Mean °C · recorded conditions, not a comfort pass/fail · — means no single reading' : 'Invented space ratings / 5 · at least 5 responses · — means no qualifying sample';
+    root.querySelector('.map-legend').textContent = isExperience ? 'Invented space ratings / 5. At least 5 responses are needed; — means too few or none. Purple outline: room on the companion.' : isFit ? 'Map percentages show time in use. Purple outlines mark the selected room; — means insufficient usage evidence.' : lens === 'usage' ? 'Time in use · — means no qualifying room-use evidence' : lens === 'temperature' ? 'Mean °C · recorded conditions, not a comfort pass/fail · — means no single reading' : 'Invented space ratings / 5 · at least 5 responses · — means no qualifying sample';
   }
   root.querySelectorAll('[data-lens]').forEach(b => b.onclick = () => {
     lens = b.dataset.lens; stateHost.dataset.officeLens = lens; draw();

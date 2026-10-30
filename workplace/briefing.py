@@ -243,22 +243,57 @@ def layout_options(row, evidence, capacity, seats, layout, qualifies):
 
 def experience(ctx, case):
     from workplace.feedback_view import styles, portrait_survey
+    from workplace import office_map
     styles()
     all_records = c.feedback_in_scope(ctx)
-    left, right = st.columns([1.35, 1], gap="large")
-    with left:
-        audience = st.session_state.get("feedback_audience", "Everyone")
-        records = all_records if audience == "Everyone" else all_records[all_records.audience.eq(audience)]
-        s = feedback_summary(records)
-        html('<div class="brief-demo-banner"><b>Sample results:</b> invented responses aligned to the selected rooms and dates. Test submissions appear separately below.</div>')
-        metrics([
-            ("Space experience", u.fmt(s["experience"], "/5", 2), "How the space feels", "Sample responses", "purple", False),
-            ("Equipment experience", u.fmt(s["equipment"], "/5", 2), "How the technology feels", "Sample responses", "purple", False),
-            ("Positive space ratings", u.fmt(s["positive"], "%", 1), "Ratings of 4 or 5", "Sample responses", "forest", False),
-            ("Responses in this view", f"{s['responses']:,}", audience, "Synthetic · not live feedback", "rain", False),
-        ], stacked=True)
-    with left, st.container(key="brief_panel_sentiment"):
-        heading("Keep the two experiences visible")
+    audience = st.session_state.get("feedback_audience", "Everyone")
+    records = all_records if audience == "Everyone" else all_records[all_records.audience.eq(audience)]
+    mapped = office_map.applies(ctx)
+    with st.container(key="brief_experience_workspace" if mapped else "brief_experience_standard"):
+        html('<div class="brief-demo-banner"><b>Sample results:</b> invented responses aligned to the selected rooms and dates. Companion test submissions stay separate.</div>')
+        if mapped:
+            map_column, overview, companion = st.columns([1, 1.05, 1.15], gap="medium")
+            with map_column, st.container(key="brief_panel_experience_map"):
+                room = experience_room(ctx)
+                office_map.render_experience(ctx, records, room, audience)
+        else:
+            overview, companion = st.columns([1.35, 1], gap="large")
+        with overview:
+            heading("Sentiment overview", f'{len(ctx["inventory"])} rooms in the current filters · {audience}')
+            experience_overview(records, audience)
+            if not mapped:
+                room = experience_room(ctx)
+        with companion, st.container(key="brief_companion"):
+            html('<div class="brief-companion-label">COMPANION APP · READY TO TRY</div>')
+            portrait_survey(ctx["inventory"].set_index("Room key", drop=False).loc[room], compact=True)
+            latest = st.session_state.get("feedback_tryouts", [])
+            if latest:
+                response = latest[-1]
+                html(f'<div class="brief-test-receipt"><b>Your latest test · {escape(response["room_name"])}</b>'
+                     f'{escape(response["audience"])} · Space {response["experience"]}/5 · Equipment {response["equipment"]}/5'
+                     '<small>Saved in this browser session only · historical sample scores stay separate</small></div>')
+    with ctx["tools"].expander("Companion deployment details"):
+        st.write("The companion is ready to try here. Choose employee or guest, rate the space and equipment, then share feedback. Use Next person to clear the form for the next visitor.")
+        st.write("For deployment, validate the web app on Neat Frame, connect an authenticated response store and agree who follows up on feedback and IT-help requests. Hardware touch behaviour and live integrations have not been tested.")
+        st.page_link("pages/Frame.py", label="Open the full portrait screen", icon=":material/open_in_full:")
+
+
+def experience_room(ctx):
+    options = preferred_room(ctx)
+    return st.selectbox("Room on the companion app", options, **u.field_state("selected_room", options[0]))
+
+
+def experience_overview(records, audience):
+    """Keep the overall filtered story visible when a map room is selected."""
+    s = feedback_summary(records)
+    metrics([
+        ("Space experience", u.fmt(s["experience"], "/5", 2), "How the space feels", "Sample responses", "purple", False),
+        ("Equipment experience", u.fmt(s["equipment"], "/5", 2), "How the technology feels", "Sample responses", "purple", False),
+        ("Positive space ratings", u.fmt(s["positive"], "%", 1), "Ratings of 4 or 5", "Sample responses", "forest", False),
+        ("Responses in this view", f"{s['responses']:,}", audience, "Synthetic · not live feedback", "rain", False),
+    ], stacked=True)
+    with st.container(key="brief_panel_sentiment"):
+        heading("Employees and guests")
         for group, label in zip(AUDIENCES, ["Neat employees", "Customers / guests"]):
             rows = records[records.audience.eq(group)]
             if audience != "Everyone" and audience != group:
@@ -273,23 +308,7 @@ def experience(ctx, case):
         issues = records.loc[records.issue.ne(""), "issue"].value_counts()
         focus = f"Most frequent sample issue: {issues.index[0]} ({issues.iloc[0]} responses)." if len(issues) else "No issues flagged in this sample selection."
         html(f'<div class="brief-small"><b>{escape(focus)}</b></div>')
-        html('<div class="brief-insight"><b>Close the feedback loop</b>Workplace + IT: assign recurring issues, make a change, then compare real employee and guest feedback. These samples demonstrate the method; they do not establish satisfaction.</div>')
-    with left:
-        options = preferred_room(ctx)
-        room = st.selectbox("Room on the companion app", options, **u.field_state("selected_room", options[0]))
-        latest = st.session_state.get("feedback_tryouts", [])
-        if latest:
-            response = latest[-1]
-            html(f'<div class="brief-test-receipt"><b>Your latest test · {escape(response["room_name"])}</b>'
-                 f'{escape(response["audience"])} · Space {response["experience"]}/5 · Equipment {response["equipment"]}/5'
-                 '<small>Saved in this browser session only · historical sample scores stay separate</small></div>')
-        with ctx["tools"].expander("Companion deployment details"):
-            st.write("The companion is ready to try here. Choose employee or guest, rate the space and equipment, then share feedback. Use Next person to clear the form for the next visitor.")
-            st.write("For deployment, validate the web app on Neat Frame, connect an authenticated response store and agree who follows up on feedback and IT-help requests. Hardware touch behaviour and live integrations have not been tested.")
-            st.page_link("pages/Frame.py", label="Open the full portrait screen", icon=":material/open_in_full:")
-    with right, st.container(key="brief_companion"):
-        html('<div class="brief-companion-label">COMPANION APP · READY TO TRY</div>')
-        portrait_survey(ctx["inventory"].set_index("Room key", drop=False).loc[room], compact=True)
+        html('<div class="brief-insight"><b>Close the feedback loop</b>Workplace + IT: review recurring issues, act, then compare real employee and guest feedback before and after.</div>')
 
 
 def action_signal(ctx, room, kind):

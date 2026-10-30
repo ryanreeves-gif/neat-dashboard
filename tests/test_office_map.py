@@ -6,7 +6,7 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from workplace import analytics as a, portfolio as p
-from workplace.office_map import applies, choose_space, map_rows, products
+from workplace.office_map import applies, choose_space, map_rows, meeting_rows, products
 from workplace.feedback import sample_feedback
 
 
@@ -88,6 +88,21 @@ def test_equipment_counts_unknown_codes_and_markup_are_not_guessed():
     assert {r["name"]: r["count"] for r in result} == {"Neat Frame": 2, "Unidentified model XX999": 1}
 
 
+def test_sentiment_map_respects_audience_and_minimum_response_count():
+    ctx, _ = office_fixture()
+    records = pd.DataFrame([
+        dict(room_key="London EC / Arran", audience=audience, experience=score, equipment=score)
+        for audience, score in [("Neat employee", 3), ("Customer / guest", 5)] for _ in range(6)
+    ])
+    for audience, score in [("Neat employee", 3), ("Customer / guest", 5)]:
+        rows = {r["id"]: r for r in meeting_rows(ctx, records[records.audience.eq(audience)])}
+        assert rows["G"]["rating"] == score and rows["G"]["responses"] == 6
+        assert rows["A"]["rating"] is None and rows["A"]["responses"] == 0
+        assert all(r["kind"] == "room" for r in rows.values())
+    limited = {r["id"]: r for r in meeting_rows(ctx, records.head(4))}
+    assert limited["G"]["rating"] is None and limited["G"]["responses"] == 4
+
+
 def test_london_map_renders_with_scoped_source_and_keeps_other_chapters(monkeypatch):
     from workplace import data as source
     ctx, portfolio = office_fixture()
@@ -122,3 +137,24 @@ def test_london_map_renders_with_scoped_source_and_keeps_other_chapters(monkeypa
     rendered = " ".join(e.proto.body for e in at.get("html"))
     assert "Current room · 12 seats" in rendered
     assert "Smaller-room option · 6 seats" in rendered
+    at.switch_page("pages/Feedback.py").run()
+    assert not at.exception, [e.message for e in at.exception]
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert payload["view"] == "experience" and payload["selected"] == "G"
+    assert any(b.label == "Share feedback" for b in at.button)
+    rendered = " ".join(e.proto.body for e in at.get("html"))
+    assert "Sentiment overview" in rendered and "How each room feels" in rendered
+    assert "Arran · London EC" in rendered
+    summary = next(e.proto.body for e in at.get("html") if 'brief-metrics stacked' in e.proto.body)
+    at.selectbox(key="_selected_room").select("London EC / Barra").run()
+    assert not at.exception, [e.message for e in at.exception]
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert payload["selected"] == "A"
+    assert any("Barra · London EC" in e.proto.body for e in at.get("html"))
+    assert next(e.proto.body for e in at.get("html") if 'brief-metrics stacked' in e.proto.body) == summary
+    total = sum(r["responses"] for r in payload["rows"])
+    at.selectbox(key="_feedback_audience").select("Customer / guest").run()
+    assert not at.exception, [e.message for e in at.exception]
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert sum(r["responses"] for r in payload["rows"]) < total
+    assert payload["selected"] == "A"
