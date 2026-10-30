@@ -36,20 +36,30 @@ The app opens in **Presentation view**, a compact four-chapter executive briefin
 
 | Webinar timing | Chapter | Decision and demonstration |
 | --- | --- | --- |
-| 0:00–2:00 | Current state | Show the room map, usage/sample-rating leaders and the room-specific recommended next step. |
-| 2:00–4:00 | Room fit | See current and proposed room layouts immediately, with an automatic capacity-peer comparison. |
+| 0:00–2:00 | Technology | Recorded room availability and a simulated Teams sign-out/recovery. Use Barra; Arran is recorded as Zoom. |
+| 2:00–4:00 | Environment | Recorded temperature, humidity and VOC trends; use Arran to investigate the running schedule. |
 | 4:00–6:00 | Experience | Separate employee and guest sample sentiment; submit one response on the already-open portrait companion. |
-| 6:00–8:00 | Improve | Read Check → Try → Measure beside the simulation; run one example and close on the owner and outcome to prove. |
+| 6:00–8:00 | Actions | IT, facilities and feedback next steps; run one control example and agree ownership and measurement. |
 | 8:00–10:30 | How we built it | Customer questions, Google Sheet observations, Python/Streamlit/Plotly, ChatGPT-assisted iteration, GitHub and Streamlit hosting. |
 
-Presenter tools → Timing and talking points contains these cues. Each chapter has a next link. Use one room through the story, and retain deeper pages for questions. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
+Presenter tools → Timing and talking points contains these cues. Each chapter has a next link. The room-performance map and room-size comparison remain in Presenter tools → Detailed analysis. Main filters stay visible across all screens. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
+
+### Microsoft sign-in alert demonstration
+
+Technology is the first presentation screen. Actual recorded device availability is shown separately from a one-room, explicitly simulated Microsoft Teams sign-in sequence. Choose a recorded Teams room, select **Simulate sign-out alert**, then **Simulate sign-in recovery**. The recorded device status never changes. Other Teams rooms show sign-in **Not connected**, never assumed healthy; other platforms show **Not applicable**. The Actions screen reflects the active scoped example and names IT / room support as owner. No command, ticket, notification or webhook request is sent.
+
+Events use a small internal example schema (`event_id`, `room_key`, `state`, `occurred_at`, `source`). This is **not** a Neat or Microsoft webhook contract. Invented event times sit within the selected recorded-clock date window; the sequence is a replay, not a measured incident or response time. Dates, room scope, operating hours, platform/status observations and source-mode changes invalidate the example. A missing event is unknown; a sign-out clears only after an explicit later sign-in event. Recovery establishes the simulated sign-in state only, not complete room health.
+
+For a live implementation, first verify redacted real sign-out and recovery payloads from the customer's available alert source and their delivery/authentication contract. Build a secured receiver and persistent store, map stable tenant/device/room IDs, deduplicate deliveries, order by source event time, reconcile with an initial status snapshot, monitor delivery freshness and handle unknown/stale states. Agree room-support ownership and verify a test meeting before closing an incident. Avoid credentials or account personal data in public dashboard content. No live receiver or response store is implemented here.
+
+Microsoft documents separate sign-in and offline health signals for Teams Rooms on Android: [Health signals](https://learn.microsoft.com/microsoftteams/rooms/signals). That supports the distinction shown here; it does not verify a specific Neat webhook payload or establish that this app is connected to Microsoft monitoring.
 
 The compact workflow reuses coverage-screened findings. A user can also explore a clearly labelled simulation without a qualifying signal; this does not authorise an intervention. Simulation results are tied to room, dates, hours, thresholds and evidence; changing that configuration removes the displayed result. No command is sent, no ServiceNow ticket is created and no saving is measured. The financial example is opt-in and independent of this control simulation.
 
 ### Webinar decision and reliability improvements
 
-- Overview recommends a scoped investigation for the selected/default room, with an owner and measurement goal. Recommendations follow the location/room/date scope; they never use synthetic sentiment to justify building changes.
-- Improve places one recommended first step, its owner and Check → Try → Measure alongside a single Run example button. Simulation settings and the business case are in Presenter tools. Operating-schedule checks come before layout spending when both signals qualify. Only an entered case for that exact room can appear in its business-case detail; illustrative or other-room cases cannot become its forecast.
+- The main route is Technology → Environment → Experience → Actions. The supporting room-performance overview recommends a scoped investigation with an owner and measurement goal. Synthetic sentiment never establishes a building fault or authorises an intervention.
+- Actions connects the scoped sign-in example, recorded room findings and sample feedback to three concise recommendations with owners and success measures alongside a single Run example button. Simulation settings and the business case are in Presenter tools. Operating-schedule checks come before layout spending when both signals qualify. Only an entered case for that exact room can appear in its business-case detail; illustrative or other-room cases cannot become its forecast.
 - Room layout and operating-schedule proposals require a qualifying finding, at least 70% occupancy coverage and two observed hours. Otherwise the proposal is to build the evidence baseline. Booking and unmet demand, genuine feedback and actual energy/cost remain unconnected and are explicitly identified as pilot inputs.
 - **Presenter tools → Data source → Hold data for presentation** is opt-in. It retains the successfully loaded observations in the current browser session across pages; filters remain interactive. A visible Held snapshot label distinguishes it from normal refresh mode. Refresh observations replaces the snapshot, while source/parser/demo changes invalidate it. Turn the hold off after presenting. It is not a durable offline backup.
 - Before rehearsal, select fixed Custom dates, enable the hold, load every chapter and reset the form and simulation. Record a backup using the webinar's screen-sharing setup.

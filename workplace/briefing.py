@@ -20,15 +20,20 @@ from workplace.overview_view import money
 from workplace.pilot import pilot_options, pilot_plan, scoped_case
 
 CHAPTERS = [
-    ("Overview", "app.py", "The current state", "How are your spaces performing?",
-     "Understand demand. Protect the experience. Decide where to invest."),
-    ("Spaces", "pages/Spaces.py", "The right space", "Does the room fit the group?",
-     "Match investment to real demand, then test a change before committing."),
-    ("Feedback", "pages/Feedback.py", "The experience", "Give people a reason to come together.",
+    ("Technology", "app.py", "Technology health", "Can people rely on the room technology?",
+     "Recorded device availability. A simulated sign-in alert. A clear IT response."),
+    ("Environment", "pages/Environment.py", "Room environment", "Does the room support a comfortable visit?",
+     "Understand the conditions, investigate the signals and protect the experience."),
+    ("Feedback", "pages/Feedback.py", "People’s experience", "How do people feel about the spaces?",
      "Listen to employees and guests. Find the friction. Protect what they value."),
-    ("Environment", "pages/Environment.py", "The next move", "What should we do next?",
-     "One room. One practical change. A result you can measure."),
+    ("Improve", "pages/Improve.py", "Recommended actions", "What should we do next?",
+     "Technology, environment and feedback — connected to practical next steps."),
 ]
+DETAILS = {
+    "Overview": ("Current state", "How are your spaces performing?", "Room use, sample sentiment and the investment question."),
+    "Spaces": ("Room fit", "Does the room fit the group?", "Match investment to real demand, then test a change before committing."),
+}
+
 
 
 def enabled():
@@ -295,7 +300,6 @@ def action(ctx, case):
 
     room = room_picker(ctx)
     plan = pilot_plan(ctx, room)
-    options = pilot_options(ctx, room)
     with ctx["tools"].expander("Simulation settings"):
         kind = st.selectbox("Control to simulate", list(KINDS), format_func=KINDS.get,
                             **u.field_state("brief_condition", "warm"))
@@ -317,26 +321,31 @@ def action(ctx, case):
         result = None
     left, right = st.columns([1, 1.5], gap="medium")
     with left, st.container(key="brief_panel_recommendation"):
-        html(f'<div class="brief-label">RECOMMENDED FIRST STEP · {escape(plan["name"])}</div>'
-             f'<h2 class="brief-direct-answer">{escape(plan["title"])}</h2>')
-        findings = x.improvement_summary(ctx)["issues"]
-        findings = findings[findings["Room key"].eq(room)]
-        if plan["focus"] == "Operating schedules":
-            warm = findings[findings.Kind.eq("warm")]
-            light = findings[findings.Kind.eq("light")]
-            observed = warm.iloc[0] if not warm.empty else light.iloc[0]
-            condition = "warm" if observed.Kind == "warm" else "bright"
-            html(f'<div class="brief-why"><strong>{observed["Evidence hours"]:.1f} h</strong><span>{condition} while recorded empty</span></div>')
-            st.caption("A reason to check actual controls and schedules; not proof of wasted energy.")
+        from workplace.health import current_demo
+        demo = current_demo(ctx, st.session_state)
+        heading("Three practical next steps")
+        if demo:
+            tech_room = demo["room"].split(" / ")[-1]
+            tech_title = "Restore Teams sign-in" if demo["stage"] == 1 else "Verify the room after recovery" if demo["stage"] == 2 else "Prove the alert-to-response workflow"
+            tech_detail = "Check the account, restore access and verify a test meeting." if demo["stage"] == 1 else "Validate a test meeting and confirm that the issue stays resolved." if demo["stage"] == 2 else "Test detection, recovery and ownership before connecting live alerts."
         else:
-            html(f'<div class="brief-small">{escape(plan["action"])}</div>')
-        steps([( "Check", plan["gate"]), ("Try", plan["action"]), ("Measure", plan["measure"])])
-        html(f'<div class="brief-owner"><b>Owner</b><span>{escape(plan["owner"])}</span></div>')
-        if "Room layout" in options and plan["focus"] != "Room layout":
-            html('<div class="brief-small"><b>Then consider the layout.</b> Validate bookings and peak demand before spending on a smaller-room design.</div>')
-        html('<div class="brief-small"><b>Value to prove:</b> better use and experience, with any cost saving measured against the baseline.</div>')
+            tech_room, tech_title, tech_detail = "Selected estate", "Connect and validate sign-in monitoring", "Verify device mapping, event freshness and recovery before relying on the alerts."
+        records = c.feedback_in_scope(ctx, room=room, audience=st.session_state.get("feedback_audience", "Everyone"))
+        issues = records.loc[records.issue.ne(""), "issue"].value_counts()
+        theme = f"Sample theme: {issues.index[0]}. " if len(issues) else ""
+        for number, title, source, detail, owner, measure in [
+            (1, tech_title, tech_room + " · sign-in simulation", tech_detail,
+             "IT / room support", "Detection time, restoration time and repeated incidents."),
+            (2, plan["title"], plan["name"] + " · recorded room evidence", plan["gate"] + " " + plan["action"],
+             plan["owner"], plan["measure"]),
+            (3, "Collect real feedback after the change", plan["name"] + " · sample sentiment", theme + "Confirm the theme with users; sample ratings do not establish a cause.",
+             "Workplace + IT", "Employee and guest ratings, response count and recurring issues."),
+        ]:
+            html(f'<article class="health-next"><span>{number:02d}</span><div><h3>{escape(title)}</h3><small class="health-next-source">{escape(source)}</small>'
+                 f'<p>{escape(detail)}</p><small><b>Owner:</b> {escape(owner)}<br><b>Measure:</b> {escape(measure)}</small></div></article>')
+        html('<div class="brief-small"><b>Financial value:</b> scope and cost the change, then measure the actual benefit. Savings are still to quantify.</div>')
     with right, st.container(key="brief_panel_control_preview"):
-        heading("See how a response could work", "Illustrative example · no commands are sent")
+        heading("See a facilities response", "Illustrative AC, lighting or ventilation example · no commands are sent")
         target = f"{temperature:g}°C" if kind == "warm" else f"{brightness}% output" if kind == "light" else f"{boost}% boost"
         if st.button(f"Run example · {KINDS[kind]} · {target} · {duration} min", key="brief_run", type="primary", width="stretch"):
             result = {"signature": signature, "payload": {**config, "created_at": datetime.now(timezone.utc).isoformat(),
@@ -360,27 +369,36 @@ def action(ctx, case):
 
 
 def run(active):
-    index = next(i for i, row in enumerate(CHAPTERS) if row[0] == active)
-    _, _, _, title, subtitle = CHAPTERS[index]
+    from workplace.health_view import technology
+    from workplace.environment_briefing import environment
+    from workplace.health import current_demo
+    index = next((i for i, row in enumerate(CHAPTERS) if row[0] == active), None)
+    if index is None:
+        _, title, subtitle = DETAILS[active]
+    else:
+        _, _, _, title, subtitle = CHAPTERS[index]
     tools = u.shell(active, title, subtitle, briefing=True)
     with st.container(key="brief_filters"):
         ctx = u.context(show_evidence=False, sidebar_details=True, details_container=tools)
     ctx["tools"] = tools
+    if "health_demo" in st.session_state and current_demo(ctx, st.session_state) is None:
+        st.session_state.pop("health_demo", None)
     with tools:
         st.selectbox("Sentiment audience", ["Everyone", *AUDIENCES], **u.field_state("feedback_audience", "Everyone"))
     case = finance_case(ctx)
     locations = ", ".join(sorted(ctx["inventory"].Location.unique()))
-    # The analysis boundary can be midnight on the following day; show the
-    # inclusive calendar date selected in the filter instead.
     scope = f"{locations} · {ctx['start']:%d %b}–{ctx['end_date']:%d %b %Y} · {'Office hours' if ctx['office'] else 'All hours'} · {len(ctx['inventory'])} rooms"
     held = f' · Held snapshot {ctx["fetched"]:%H:%M}' if st.session_state.get("hold_observations") else ""
     html(f'<div class="brief-scope"><span>{escape(scope)}</span><b>{"DEMO telemetry" if ctx["demo"] else "Pulse observations"} · {u.fmt(ctx["summary"]["coverage"], "%")} coverage{held}</b></div>')
-    {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action}[active](ctx, case)
-    endings = ["Approve one pilot. Measure what changes.", "Use observed demand to test the room mix.",
+    {"Technology": technology, "Overview": summary, "Spaces": space, "Feedback": experience,
+     "Environment": environment, "Improve": action}[active](ctx, case)
+    endings = ["Detect the issue. Restore access. Verify the meeting.", "Use the conditions to focus a practical investigation.",
                "Turn a moment of feedback into a better next visit.", "Start with one room. Prove the benefit. Then scale."]
     left, right = st.columns([2.4, 1], vertical_alignment="center")
     with left:
-        html(f'<div class="brief-end"><span><strong>{index+1:02d} / 04</strong> &nbsp; {endings[index]}</span></div><div class="brief-proof">Feedback is synthetic · Costs are assumptions · Controls are simulated</div>')
+        label = f"{index+1:02d} / 04" if index is not None else "DETAILED ANALYSIS"
+        ending = endings[index] if index is not None else "Supporting evidence for the four-screen story."
+        html(f'<div class="brief-end"><span><strong>{label}</strong> &nbsp; {ending}</span></div><div class="brief-proof">Sign-in events and controls are simulated · Feedback is synthetic · Costs are assumptions</div>')
     with right:
-        following = CHAPTERS[(index+1) % len(CHAPTERS)]
-        st.page_link(following[1], label=("Next: " if index < 3 else "Return to ") + following[2].lower(), icon=":material/arrow_forward:", width="stretch")
+        following = CHAPTERS[(index+1) % len(CHAPTERS)] if index is not None else CHAPTERS[0]
+        st.page_link(following[1], label=("Next: " if index is not None and index < 3 else "Return to ") + following[2].lower(), icon=":material/arrow_forward:", width="stretch")
