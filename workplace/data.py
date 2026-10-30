@@ -38,7 +38,7 @@ def load():
     order = setting("NEAT_DATE_ORDER", "legacy_mixed")
     try:
         with st.spinner("Loading room observations…"):
-            data, quality, fetched = fetch(source, order, demo)
+            data, quality, fetched = observations(source, order, demo)
     except Exception as exc:
         st.error("The telemetry feed could not be loaded. Check its availability and CSV columns, then try again.")
         with st.expander("Connection details"):
@@ -46,6 +46,7 @@ def load():
             if isinstance(exc, ValueError):
                 st.write(str(exc))
         if st.button("Retry connection"):
+            st.session_state.pop("held_observations", None)
             fetch.clear()
             st.rerun()
         st.button("Explore with clearly labelled sample data", on_click=lambda: st.session_state.update(demo_mode=True))
@@ -56,3 +57,21 @@ def load():
     if demo:
         st.info("Demonstration mode · All readings on this page are generated sample data.")
     return data, quality, fetched
+
+
+def observations(source, order, demo):
+    """Opt-in per-session snapshot for uninterrupted presentations.
+
+    Changing source/parser/demo mode invalidates the hold. Refresh explicitly
+    replaces it. A failed fetch is never hidden by an unrelated old snapshot.
+    """
+    key = (source, order, demo)
+    held = st.session_state.get("held_observations")
+    holding = st.session_state.get("hold_observations", False)
+    if holding and held and held["key"] == key:
+        return held["data"]
+    st.session_state.pop("held_observations", None)
+    result = fetch(source, order, demo)
+    if holding:
+        st.session_state["held_observations"] = {"key": key, "data": result}
+    return result

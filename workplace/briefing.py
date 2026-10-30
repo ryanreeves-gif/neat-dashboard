@@ -17,16 +17,17 @@ from workplace.peer_view import cached_peer
 from workplace.scenarios import room_evidence, evaluate_layout
 from workplace.value import business_case
 from workplace.overview_view import money
+from workplace.pilot import pilot_options, pilot_plan, scoped_case
 
 CHAPTERS = [
     ("Overview", "app.py", "The current state", "How are your spaces performing?",
-     "See what works. Find the opportunity. Choose the right improvement."),
+     "Understand demand. Protect the experience. Decide where to invest."),
     ("Spaces", "pages/Spaces.py", "The right space", "The right space for the way people work.",
      "Match investment to real demand, then test a change before committing."),
     ("Feedback", "pages/Feedback.py", "The experience", "Give people a reason to come together.",
      "Listen to employees and guests. Find the friction. Protect what they value."),
     ("Environment", "pages/Environment.py", "The next move", "Turn an observation into an improvement.",
-     "One room. One pilot. A measurable change in cost, use and experience."),
+     "Choose one pilot, name the owners and agree what success will look like."),
 ]
 
 
@@ -164,13 +165,16 @@ def summary(ctx, case):
         with right:
             leader_card(portfolio, "usage")
             leader_card(portfolio, "sentiment")
-            conclusion, _, _ = x.conclusion(ctx, x.improvement_summary(ctx))
-            html(f'<div class="brief-insight"><b>The next decision</b>{escape(conclusion)} Open Improvement choices to see the rooms and intervention options.</div>')
+            preferred_room(ctx)
+            plan = pilot_plan(ctx, st.session_state["selected_room"])
+            html(f'<article class="brief-recommendation"><div class="brief-label">RECOMMENDED NEXT STEP · {escape(plan["name"])}</div>'
+                 f'<h3>{escape(plan["title"])}</h3><p>{escape(plan["action"])}</p>'
+                 f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
     with st.sidebar.expander("How to read the room picture"):
         st.write("Usage leaders need positive capacity, at least 70% occupancy coverage and two observed hours. The estate percentage pools all valid observed hours. Missing time is unknown, not empty.")
         st.write("Sample sentiment leaders need at least five responses and are independent of telemetry coverage. Usage ties use one decimal place; sentiment ties use two. An audience filter changes ratings, never usage or improvement signals.")
         st.write("The map only includes rooms passing both checks. Bubble sizes reflect recorded capacity; colour shows a possible review route. Reference lines are guides, not performance targets. Short periods and sample ratings cannot establish the best room design.")
-        st.write("Controls reviews flag warm or lit empty-room observations. Layout reviews flag rooms with two occupied hours and a 90th-percentile group no larger than half their capacity. Both routes require validation before action.")
+        st.write("Controls reviews flag warm or bright empty-room observations. Lux cannot prove electric lights were on. Layout reviews flag rooms with two occupied hours and a 90th-percentile group no larger than half their capacity. Both routes require validation before action.")
         st.dataframe(portfolio[["Room key", "Utilisation %", "Coverage %", "Responses", "Sentiment", "Route"]], hide_index=True, width="stretch")
 
 
@@ -204,7 +208,7 @@ def improvement_choices(ctx, portfolio):
             if row.Warm:
                 signals.append(f"{row['Warm hours']:.1f} h warm while empty")
             if row.Light:
-                signals.append(f"{row['Light hours']:.1f} h lit while empty")
+                signals.append(f"{row['Light hours']:.1f} h bright while empty")
             signal = " · ".join(signals)
             route_card("01", "Controls / BMS review", signal,
                        "Check schedules and room-to-zone controls; trial occupancy-led HVAC or lighting where suitable.",
@@ -230,7 +234,7 @@ def improvement_choices(ctx, portfolio):
         else:
             html('<div class="brief-small"><b>Layout:</b> no qualifying capacity-fit signal in this period.</div>')
         with st.popover("What needs validating?", icon=":material/info:", width="stretch"):
-            st.write("A BMS link may be an operational change, but it is not automatically simple: existing controls, room-to-zone mapping, permissions, schedules and comfort constraints determine feasibility. Warm or lit does not by itself prove wasted energy.")
+            st.write("A BMS link may be an operational change, but it is not automatically simple: existing controls, room-to-zone mapping, permissions, schedules and comfort constraints determine feasibility. Warm or bright does not by itself prove wasted energy; daylight can explain lux readings.")
             st.write("Reconfiguration is a design and investment decision. Test booking demand, peak groups, room purpose, dimensions, accessibility, acoustics and AV before costing partitions or changing capacity. A second room's future use cannot be inferred from this feed.")
             st.write("Where both routes apply, assess controls feasibility and room purpose first. Use a reversible pilot where appropriate, then decide whether a capital project is justified. Set an owner, budget, baseline and review date.")
             st.caption("The two condition-hour values can overlap. Review routes use telemetry; invented sentiment is not evidence for a building change or financial saving.")
@@ -291,7 +295,8 @@ def space(ctx, case):
             st.write("The automatic peer uses the closest capacity within 25% or two seats, preferring the same location. The match can come from outside the location filter; dates and operating hours are identical.")
             st.caption("A capacity match does not control for purpose or equipment. Short periods and poor coverage may not represent demand. Empty and unknown time are excluded from the replay.")
             st.page_link("pages/Scenarios.py", label="Explore room alternatives", icon=":material/compare_arrows:")
-    html('<div class="brief-small"><b>Suggested improvement:</b> trial the room size people need, while preserving access to larger rooms for peak demand.</div>')
+    plan = pilot_plan(ctx, room, "Room layout")
+    html(f'<div class="brief-insight"><b>{escape(plan["title"])}</b>{escape(plan["gate"])} Owner: {escape(plan["owner"])}.</div>')
 
 
 def layout_options(row, evidence, capacity, seats, layout):
@@ -315,7 +320,7 @@ def layout_options(row, evidence, capacity, seats, layout):
     if evidence["coverage"] is None or evidence["coverage"] < 70:
         st.warning("Limited occupancy coverage: this replay is exploratory. Restore reporting before recommending a layout change.")
     html(f'<div class="brief-insight"><b>Decision gate · observed peak {u.fmt(evidence["peak"])} people</b>'
-         'Check peak bookings, purpose, acoustics, accessibility and AV. A smaller footprint may release space; its future use and financial return still need a business case.</div>')
+         'Workplace + IT: check bookings, unmet demand, purpose, acoustics, accessibility and AV. A smaller footprint may release space; future use and financial return need a business case.</div>')
     with st.popover("Alternatives and replay assumptions", icon=":material/compare_arrows:", width="stretch"):
         st.write("Keep the current layout, trial furniture changes, or assess a split-room design. Each requires its own capacity, design and cost assessment. This replay treats each observed count as one group and excludes empty, missing and offline time.")
         st.caption("A second room's demand and simultaneous meetings are unknown. No additional meetings or savings are predicted.")
@@ -354,7 +359,8 @@ def experience(ctx, case):
         html('<div class="brief-small">Green: positive (4–5) · Gold: neutral (3) · Walnut: needs attention (1–2)</div>')
         issues = records.loc[records.issue.ne(""), "issue"].value_counts()
         focus = f"Most frequent sample issue: {issues.index[0]} ({issues.iloc[0]} responses)." if len(issues) else "No issues flagged in this sample selection."
-        html(f'<div class="brief-small"><b>{escape(focus)}</b> Validate recurring issues with real feedback before and after a pilot.</div>')
+        html(f'<div class="brief-small"><b>{escape(focus)}</b></div>')
+        html('<div class="brief-insight"><b>Close the feedback loop</b>Workplace + IT: assign recurring issues, make a change, then compare real employee and guest feedback. These samples demonstrate the method; they do not establish satisfaction.</div>')
     with left:
         options = preferred_room(ctx)
         room = st.selectbox("Room on the companion app", options, **u.field_state("selected_room", options[0]))
@@ -392,6 +398,11 @@ def action(ctx, case):
     from workplace.control_demo import KINDS, scenario, animation_html
     import streamlit.components.v1 as components
 
+    view = st.segmented_control("Improvement view", ["Control simulation", "Pilot & outcomes"], required=True,
+        label_visibility="collapsed", **u.field_state("brief_action_view", "Control simulation"))
+    if view == "Pilot & outcomes":
+        pilot_outcomes(ctx, case)
+        return
     left, right = st.columns([1.3, 1], gap="medium", vertical_alignment="center")
     with left:
         room = room_picker(ctx)
@@ -472,6 +483,64 @@ def action(ctx, case):
         heading("03 · See the response", "Play, pause or scrub the simulated timeline")
         components.html(animation_html(settings, row["Room Name"], result["payload"]["created_at"] if result else None),
                         height=505, scrolling=False)
+    if st.button("Choose the pilot and success measures", key="brief_to_pilot", width="stretch"):
+        st.session_state["brief_action_view"] = "Pilot & outcomes"
+        st.rerun()
+
+
+def pilot_outcomes(ctx, case):
+    left, right = st.columns([1.3, 1], gap="medium")
+    with left:
+        room = room_picker(ctx)
+    options = pilot_options(ctx, room)
+    if st.session_state.get("brief_pilot_focus") not in options:
+        st.session_state["brief_pilot_focus"] = options[0]
+    with right:
+        focus = st.selectbox("Pilot focus", options, label_visibility="collapsed",
+                             **u.field_state("brief_pilot_focus", options[0]))
+    plan = pilot_plan(ctx, room, focus)
+    row = ctx["stats"].set_index("Room key").loc[room]
+    takeaway(f'{plan["name"]} · {plan["title"]}',
+             f'Proposed owner: {plan["owner"]}. Sponsor: Workplace / COO; Finance validates the business case.',
+             focus == "Evidence baseline")
+    html('<div class="brief-pilot-stages">' + ''.join(
+        f'<article><span>{number}</span><div><h3>{escape(title)}</h3><p>{escape(detail)}</p></div></article>'
+        for number, title, detail in [
+            ("01", "Validate", plan["gate"]),
+            ("02", "Trial", plan["action"]),
+            ("03", "Review", plan["success"]),
+        ]) + '</div>')
+    left, right = st.columns([1.5, 1], gap="medium")
+    with left, st.container(key="brief_panel_outcomes"):
+        heading("Agree the measures before the change", "Planning scorecard · no pilot has been measured by this dashboard")
+        usage = (f'{u.fmt(row["Utilisation %"], "%", 1)} time in use · '
+                 f'{u.fmt(row["Coverage %"], "%")} coverage')
+        demand = (f'90% of occupied time: ≤{u.fmt(row["P90 attendance"])} people'
+                  if pd.notna(row["P90 attendance"]) else 'Attendance evidence needed')
+        measures = [
+            ("Space & demand", usage + "; " + demand, "Repeat use / capacity checks; add bookings and unmet demand"),
+            ("People & comfort", "Real feedback not collected here", "Compare real ratings, recurring issues and comfort"),
+            ("Cost & energy", "Measured baseline not connected", "Compare actual costs / energy; account for pilot costs"),
+        ]
+        html('<div class="brief-scorecard"><div class="brief-score-head"><span>Outcome</span><span>Before · selected scope</span><span>After · to collect</span></div>' + ''.join(
+            f'<div class="brief-score-row"><b>{escape(label)}</b><span>{escape(before)}</span><span>{escape(after)}</span></div>'
+            for label, before, after in measures) + '</div>')
+        html(f'<div class="brief-small">{escape(plan["source"])} · match dates, operating hours and room purpose when comparing. Agree targets, budget and a review date before starting.</div>')
+    with right, st.container(key="brief_panel_pilot_value"):
+        heading("Build an investable case")
+        html(f'<div class="brief-value-block"><span>Potential value</span><b>{escape(plan["benefit"])}</b></div>'
+             f'<div class="brief-value-block"><span>Cost to establish</span><b>{escape(plan["cost"])}</b></div>')
+        matched = scoped_case(case, room)
+        if matched:
+            payback = "No positive payback" if matched["payback_months"] is None else f'{matched["payback_months"]:.1f} months payback'
+            html(f'<div class="brief-value-block"><span>Entered assumptions · {escape(room)}</span>'
+                 f'<b>{money(matched["annual_net"], matched["currency"])} annual net benefit</b><small>{payback} · not measured</small></div>')
+        else:
+            html('<div class="brief-value-block"><span>Financial return</span><b>To quantify for this pilot</b><small>Enter project cost, cash benefit and ongoing cost.</small></div>')
+        if st.button("Cost this room's pilot", key="brief_cost_pilot", width="stretch"):
+            st.switch_page("pages/Value.py")
+        st.caption("Released space is not automatically a cash saving. Energy needs metering; productivity needs separate evidence.")
+    html('<div class="brief-closing"><b>The decision today: agree one scoped pilot.</b><span>Name an owner · establish the baseline · review the result · scale only when justified</span></div>')
 
 
 def pilot_finance(case):
@@ -502,7 +571,8 @@ def run(active):
     # The analysis boundary can be midnight on the following day; show the
     # inclusive calendar date selected in the filter instead.
     scope = f"{locations} · {ctx['start']:%d %b}–{ctx['end_date']:%d %b %Y} · {'Office hours' if ctx['office'] else 'All hours'} · {len(ctx['inventory'])} rooms"
-    html(f'<div class="brief-scope"><span>{escape(scope)}</span><b>{"DEMO telemetry" if ctx["demo"] else "Pulse observations"} · {u.fmt(ctx["summary"]["coverage"], "%")} coverage</b></div>')
+    held = f' · Held snapshot {ctx["fetched"]:%H:%M}' if st.session_state.get("hold_observations") else ""
+    html(f'<div class="brief-scope"><span>{escape(scope)}</span><b>{"DEMO telemetry" if ctx["demo"] else "Pulse observations"} · {u.fmt(ctx["summary"]["coverage"], "%")} coverage{held}</b></div>')
     {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action}[active](ctx, case)
     endings = ["Approve one pilot. Measure what changes.", "Use observed demand to test the room mix.",
                "Turn a moment of feedback into a better next visit.", "Start with one room. Prove the benefit. Then scale."]

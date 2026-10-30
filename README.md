@@ -36,14 +36,23 @@ The app opens in **Presentation view**, a compact four-chapter executive briefin
 
 | Webinar timing | Chapter | Decision and demonstration |
 | --- | --- | --- |
-| 0:00–2:00 | The conclusion | Earn the commute: which room-fit, experience and cost improvements deserve a pilot? |
-| 2:00–4:30 | The right space | One room, its automatically matched capacity peer, and a replay against a proposed smaller room. |
-| 4:30–7:00 | The experience | Separate employee and guest sentiment, then try the portrait survey in a dialog. |
-| 7:00–10:00 | The next move | Replay an explicitly simulated Pulse → ServiceNow → BMS workflow. Close on an owner, budget and review date. |
+| 0:00–2:00 | Current state | Show the room map, usage/sample-rating leaders and the room-specific recommended next step. |
+| 2:00–4:00 | Room fit | Follow one room, its automatically matched capacity peer, and the visual layout replay. |
+| 4:00–6:00 | Experience | Separate employee and guest sample sentiment; submit one response on the already-open portrait companion. |
+| 6:00–8:00 | Improve | Run one AC simulation; at 7:15 switch to Pilot & outcomes and close on an owner, baseline and success measures. |
+| 8:00–10:30 | How we built it | Customer questions, Google Sheet observations, Python/Streamlit/Plotly, ChatGPT-assisted iteration, GitHub and Streamlit hosting. |
 
 The sidebar's Presenter guide contains these cues. Each chapter has a next link. Use one room through the story, and retain deeper pages for questions. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
 
-The compact workflow reuses the coverage-screened findings. It is disabled where no qualifying finding supports the selected room and condition. Simulation results are tied to room, dates, hours, thresholds and evidence; changing that configuration removes the displayed result. No command is sent, no ServiceNow ticket is created and no saving is measured. The financial example is opt-in and independent of this control simulation.
+The compact workflow reuses coverage-screened findings. A user can also explore a clearly labelled simulation without a qualifying signal; this does not authorise an intervention. Simulation results are tied to room, dates, hours, thresholds and evidence; changing that configuration removes the displayed result. No command is sent, no ServiceNow ticket is created and no saving is measured. The financial example is opt-in and independent of this control simulation.
+
+### Webinar decision and reliability improvements
+
+- Overview recommends a scoped investigation for the selected/default room, with an owner and measurement goal. Recommendations follow the location/room/date scope; they never use synthetic sentiment to justify building changes.
+- Improve → **Pilot & outcomes** provides Validate → Trial → Review, proposed owners, a planning scorecard and the missing ingredients of the business case. The After column describes evidence to collect, not fabricated results. Only an entered case for that exact room can appear here; illustrative or other-room cases cannot become its forecast.
+- Room layout and operating-schedule proposals require a qualifying finding, at least 70% occupancy coverage and two observed hours. Otherwise the proposal is to build the evidence baseline. Booking and unmet demand, genuine feedback and actual energy/cost remain unconnected and are explicitly identified as pilot inputs.
+- **Data source → Hold data for presentation** is opt-in. It retains the successfully loaded observations in the current browser session across pages; filters remain interactive. A visible Held snapshot label distinguishes it from normal refresh mode. Refresh observations replaces the snapshot, while source/parser/demo changes invalidate it. Turn the hold off after presenting. It is not a durable offline backup.
+- Before rehearsal, select fixed Custom dates, enable the hold, load every chapter and reset the form and simulation. Record a backup using the webinar's screen-sharing setup.
 
 The full dashboard remains available:
 
