@@ -1,4 +1,4 @@
-"""Four compact chapters for a ten-minute executive demonstration.
+"""Five compact chapters for a ten-minute executive demonstration.
 
 The full analytical pages stay available. This view reuses their evidence and
 keeps observations, invented feedback, financial assumptions and controls apart.
@@ -28,6 +28,8 @@ CHAPTERS = [
      "Listen to employees and guests. Find the friction. Protect what they value."),
     ("Environment", "pages/Environment.py", "The next move", "What should we do next?",
      "One room. One practical change. A result you can measure."),
+    ("Next steps", "pages/Next_Steps.py", "Next steps", "One room. One change. Prove the value.",
+     "Three takeaways. One proposed next step."),
 ]
 
 
@@ -480,6 +482,8 @@ def run(active):
     index = next(i for i, row in enumerate(CHAPTERS) if row[0] == active)
     _, _, _, title, subtitle = CHAPTERS[index]
     tools = u.shell(active, title, subtitle, briefing=True)
+    if tools is None:
+        tools = st.sidebar
     with st.container(key="brief_filters"):
         ctx = u.context(show_evidence=False, sidebar_details=True, details_container=tools)
     ctx["tools"] = tools
@@ -492,12 +496,14 @@ def run(active):
     scope = f"{locations} · {ctx['start']:%d %b}–{ctx['end_date']:%d %b %Y} · {'Office hours' if ctx['office'] else 'All hours'} · {len(ctx['inventory'])} rooms"
     held = f' · Held snapshot {ctx["fetched"]:%H:%M}' if st.session_state.get("hold_observations") else ""
     html(f'<div class="brief-scope"><span>{escape(scope)}</span><b>{"DEMO telemetry" if ctx["demo"] else "Pulse observations"} · {u.fmt(ctx["summary"]["coverage"], "%")} coverage{held}</b></div>')
-    {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action}[active](ctx, case)
+    from workplace.decision import render as decision
+    {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action, "Next steps": decision}[active](ctx, case)
     endings = ["Approve one pilot. Measure what changes.", "Use observed demand to test the room mix.",
-               "Turn a moment of feedback into a better next visit.", "Start with one room. Prove the benefit. Then scale."]
+               "Turn a moment of feedback into a better next visit.", "Test the response, then agree the next step.",
+               "Agree the baseline, owner and review date. Scale what works."]
     left, right = st.columns([2.4, 1], vertical_alignment="center")
     with left:
-        html(f'<div class="brief-end"><span><strong>{index+1:02d} / 04</strong> &nbsp; {endings[index]}</span></div><div class="brief-proof">Feedback is synthetic · Costs are assumptions · Controls are simulated</div>')
+        html(f'<div class="brief-end"><span><strong>{index+1:02d} / {len(CHAPTERS):02d}</strong> &nbsp; {endings[index]}</span></div><div class="brief-proof">Feedback is synthetic · Costs are assumptions · Controls are simulated</div>')
     with right:
         following = CHAPTERS[(index+1) % len(CHAPTERS)]
-        st.page_link(following[1], label=("Next: " if index < 3 else "Return to ") + following[2].lower(), icon=":material/arrow_forward:", width="stretch")
+        st.page_link(following[1], label=("Next: " if index < len(CHAPTERS) - 1 else "Return to ") + following[2].lower(), icon=":material/arrow_forward:", width="stretch")

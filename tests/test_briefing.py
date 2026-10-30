@@ -13,7 +13,7 @@ def presentation():
     return at.run()
 
 
-def test_four_chapters_keep_scope_and_can_return_to_the_full_dashboard():
+def test_five_chapters_keep_scope_and_can_return_to_the_full_dashboard():
     at = presentation()
     assert not at.exception
     assert at.toggle(key="_presentation_mode").value is True
@@ -21,7 +21,7 @@ def test_four_chapters_keep_scope_and_can_return_to_the_full_dashboard():
     room = at.main.multiselect(key="_room_filter").options[0]
     at.main.multiselect(key="_room_filter").set_value([room]).run()
     at.main.selectbox(key="_preset").select("Last 30 days").run()
-    for page in ["pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
+    for page in ["pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py", "pages/Next_Steps.py"]:
         at.switch_page(page).run()
         assert not at.exception, [e.message for e in at.exception]
         assert at.main.selectbox(key="_preset").value == "Last 30 days"
@@ -29,6 +29,7 @@ def test_four_chapters_keep_scope_and_can_return_to_the_full_dashboard():
         assert at.main.multiselect(key="_locations").value == ["Example office"]
         assert at.main.selectbox(key="_hours").value == "Office hours"
         assert at.toggle(key="_presentation_mode").value is True
+    at.switch_page("pages/Environment.py").run()
     at.toggle(key="_presentation_mode").set_value(False).run()
     assert not at.exception
     assert at.button(key="environment_run")
@@ -41,7 +42,7 @@ def test_completed_custom_dates_match_scope_label_across_chapters():
     initial = at.date_input(key="_custom_dates").value
     selected = tuple(day - timedelta(days=1) for day in initial)
     at.date_input(key="_custom_dates").set_value(selected).run()
-    for page in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
+    for page in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py", "pages/Next_Steps.py"]:
         at.switch_page(page).run()
         assert not at.exception, [e.message for e in at.exception]
         assert at.date_input(key="_custom_dates").value == selected

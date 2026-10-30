@@ -38,7 +38,7 @@ def shell(active, title, subtitle, briefing=False):
         ("Understand", [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
                         ("pages/Feedback.py", "Feedback", "sentiment_satisfied"), ("pages/Environment.py", "Environment", "thermostat")]),
         ("Improve", [("pages/Insights.py", "Opportunities", "insights"), ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
-                     ("pages/Value.py", "Value & ROI", "finance_mode")]),
+                     ("pages/Value.py", "Value & ROI", "finance_mode"), ("pages/Next_Steps.py", "Next steps", "flag")]),
         ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
     tools = None
     with st.sidebar:
@@ -49,7 +49,8 @@ def shell(active, title, subtitle, briefing=False):
             for path, label, icon in [("app.py", "01 · Current state", "dashboard"),
                                       ("pages/Spaces.py", "02 · Room fit", "meeting_room"),
                                       ("pages/Feedback.py", "03 · Experience", "sentiment_satisfied"),
-                                      ("pages/Environment.py", "04 · Improve", "bolt")]:
+                                      ("pages/Environment.py", "04 · Improve", "bolt"),
+                                      ("pages/Next_Steps.py", "05 · Next steps", "flag")]:
                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
             tools = st.expander("Presenter tools")
         else:
@@ -59,20 +60,21 @@ def shell(active, title, subtitle, briefing=False):
                     st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
         with tools if tools is not None else st.container():
             st.toggle("Presentation view", **field_state("presentation_mode", True),
-                      help="Four focused pages for the webinar. Switch off for the full dashboard.")
+                      help="Four exploration pages and one clear conclusion for the webinar. Switch off for the full dashboard.")
             if presentation:
                 with st.expander("Timing and talking points"):
                     st.markdown("**8-minute walkthrough + 2½-minute build story**")
-                    st.write("**0–2 min · Current state.** Show the room map, the two leaders and the recommended first step. Follow one room.")
-                    st.write("**2–4 min · Room fit.** The current and smaller-room layouts are already visible. Check peak demand before changing capacity.")
-                    st.write("**4–6 min · Experience.** Show employee and guest ratings; submit one response on the open companion.")
-                    st.write("**6–8 min · Improve.** Explain the recommendation, run one example and close on the owner and success measure. No second tab is needed.")
+                    st.write("**0–1½ min · Current state.** Show the room map, the two leaders and the recommended first step. Follow one room.")
+                    st.write("**1½–3½ min · Room fit.** The current and smaller-room layouts are already visible. Check peak demand before changing capacity.")
+                    st.write("**3½–5½ min · Experience.** Show employee and guest ratings; submit one response on the open companion.")
+                    st.write("**5½–7 min · Improve.** Follow the selected room and run one simulation or test its layout.")
+                    st.write("**7–8 min · Next steps.** Pause on the three takeaways. Close on the proposed pilot, owner and success measure; no extra interaction is needed.")
                     st.write("**8–10½ min · Build.** Customer questions → Pulse observations in Google Sheets → Python, Streamlit and Plotly → ChatGPT-assisted iteration → GitHub and Streamlit hosting.")
-                    st.caption("Use Custom dates and Hold data for presentation. Load all four pages before presenting. Feedback is synthetic; controls are simulated; financial values are assumptions.")
+                    st.caption("Use Custom dates and Hold data for presentation. Load all five pages before presenting. Feedback is synthetic; controls are simulated; financial values are assumptions.")
                 with st.expander("Detailed analysis"):
                     for _, links in groups:
                         for path, label, icon in links:
-                            if path not in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
+                            if path not in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py", "pages/Next_Steps.py"]:
                                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
             with st.expander("Data source"):
                 st.caption("Published telemetry CSV · cached for 10 minutes")

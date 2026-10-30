@@ -80,4 +80,18 @@ div[class*="st-key-brief_panel_"]{background:white;border:1px solid #E2E7E9;bord
 .improve-value span{display:block;color:#5F259F;font-size:10px;font-weight:700;margin-bottom:5px}.improve-value b{display:block;font-size:13px;line-height:1.3}.improve-value small{display:block;font-size:10px;line-height:1.35;color:#4C515C;margin-top:5px}
 .st-key-brief_improve_workspace .brief-layout-score{gap:9px}.st-key-brief_improve_workspace .brief-layout-score span{font-size:11px}.st-key-brief_improve_workspace .brief-insight{padding:9px 12px}
 @media(max-width:700px){.improve-value{grid-template-columns:1fr}.improve-recommendation h2{font-size:20px}}
+.decision-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.decision-card{display:flex;flex-direction:column;background:#fff;border:1px solid #E2E7E9;border-top:4px solid #638C7D;border-radius:14px;padding:17px 19px;min-width:0}
+.decision-card.people{border-top-color:#5F259F}.decision-card.opportunity{border-top-color:#DBC684}
+.decision-kicker{font-size:12px;line-height:1.35;font-weight:700;letter-spacing:.25px;color:#4C515C}
+.decision-number{font-size:44px;font-weight:700;line-height:1.1;letter-spacing:-1px;margin:13px 0 9px;color:#33353C}
+.decision-card h2{font-size:19px;line-height:1.25;margin:0 0 8px;padding:0;overflow-wrap:anywhere}
+.decision-card p{font-size:15px;line-height:1.4;margin:0 0 12px;color:#4C515C}
+.decision-source{font-size:12px;line-height:1.35;color:#4C515C;margin-top:auto}
+.decision-cohorts{display:flex;gap:16px;margin:13px 0 12px}.decision-cohorts>div{flex:1;min-width:0}.decision-cohorts strong{font-size:33px;line-height:1.2;color:#5F259F;display:block;letter-spacing:-.6px}.decision-cohorts span{display:block;font-size:13px;line-height:1.3;margin-top:3px}.decision-cohorts small{display:block;font-size:11px;line-height:1.3;color:#4C515C;margin-top:3px}
+.decision-proposal{margin-top:9px;background:#EAF0ED;border-left:4px solid #638C7D;border-radius:14px;padding:17px 20px}
+.decision-proposal h2{font-size:25px;line-height:1.2;padding:0;margin:7px 0 15px;letter-spacing:-.3px}
+.decision-owners{display:grid;grid-template-columns:1fr 2fr;gap:22px}.decision-owners span{display:block;font-size:11px;font-weight:700;color:#436454;margin-bottom:4px}.decision-owners b{font-size:15px;line-height:1.4;font-weight:400;display:block}
+.decision-value{border-top:1px solid #CEDBD5;margin:13px 0 0;padding-top:11px;font-size:13px;line-height:1.4;color:#4C515C}
+@media(max-width:850px){.decision-grid{grid-template-columns:1fr}.decision-owners{grid-template-columns:1fr;gap:12px}}
 </style>
