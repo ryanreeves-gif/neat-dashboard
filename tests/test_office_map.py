@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
+import json
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
@@ -103,3 +104,21 @@ def test_london_map_renders_with_scoped_source_and_keeps_other_chapters(monkeypa
     at.switch_page("pages/Spaces.py").run()
     assert not at.exception
     assert at.selectbox(key="_selected_room").value == "London EC / Barra"
+    rendered = " ".join(e.proto.body for e in at.get("html"))
+    assert "Find the room. Test the fit." in rendered
+    assert "Current room · 7 seats" in rendered
+    assert "Smaller-room option · 3 seats" in rendered
+    assert "Purple people show the average group while occupied" in rendered
+    assert len(at.get("image")) == 2
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert payload["view"] == "fit" and payload["selected"] == "A"
+    assert all(row["kind"] == "room" for row in payload["rows"])
+    assert {row["id"] for row in payload["rows"] if row["allowed"]} == {"A"}
+    at.multiselect(key="_room_filter").set_value([]).run()
+    at.selectbox(key="_selected_room").select("London EC / Arran").run()
+    assert not at.exception, [e.message for e in at.exception]
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert payload["selected"] == "G"
+    rendered = " ".join(e.proto.body for e in at.get("html"))
+    assert "Current room · 12 seats" in rendered
+    assert "Smaller-room option · 6 seats" in rendered

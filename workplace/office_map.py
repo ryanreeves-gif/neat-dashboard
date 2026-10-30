@@ -126,6 +126,33 @@ def widget():
                               (ROOT / "assets/office-map.css").read_text())
 
 
+def fit_rows(ctx):
+    """Only scoped meeting rooms can drive the seat comparison."""
+    from workplace.customer import feedback_in_scope
+    portfolio = p.room_portfolio(ctx, feedback_in_scope(ctx))
+    rows = map_rows(ctx, portfolio, st.session_state.get("room_filter", ()))
+    return [{**row, "allowed": row["allowed"] and row["key"] is not None}
+            for row in rows if row["kind"] == "room"]
+
+
+def render_fit(ctx, room):
+    from html import escape
+    from workplace.briefing import heading, html
+    rows = fit_rows(ctx)
+    selected = next((r["id"] for r in rows if r["key"] == room and r["allowed"]), None)
+    heading("Find the room. Test the fit.", "Select a room on the map to update both seat diagrams.")
+
+    def picked():
+        event = st.session_state.get("office_fit_map_component", {})
+        choose_space(rows, event.get("picked"), st.session_state)
+
+    widget()(data={"image": picture(), "rows": rows, "selected": selected, "view": "fit"},
+             key="office_fit_map_component", on_picked_change=picked)
+    if selected is None:
+        html(f'<div class="brief-small"><b>{escape(room.split(" / ", 1)[-1])}</b> has no confirmed map position. Its seat comparison is shown alongside.</div>')
+    html('<div class="brief-small">Confirmed meeting-room positions only. Use the room menu for other rooms. Display areas are excluded from seat comparisons.</div>')
+
+
 def render(ctx, portfolio):
     """One compact spatial panel; chart comparison remains in presenter tools."""
     from workplace.briefing import html, heading, preferred_room

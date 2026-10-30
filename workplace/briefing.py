@@ -174,7 +174,20 @@ def summary(ctx, case):
 
 
 def space(ctx, case):
-    room = room_picker(ctx)
+    from workplace import office_map
+    if office_map.applies(ctx):
+        map_column, comparison = st.columns([1, 1.45], gap="medium")
+        with comparison:
+            room = room_picker(ctx)
+        with map_column, st.container(key="brief_panel_fit_map"):
+            office_map.render_fit(ctx, room)
+        with comparison, st.container(key="brief_fit_comparison"):
+            space_comparison(ctx, room)
+    else:
+        space_comparison(ctx, room_picker(ctx))
+
+
+def space_comparison(ctx, room):
     r = ctx["stats"].set_index("Room key").loc[room]
     evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
     capacity = int(r.Capacity) if pd.notna(r.Capacity) and r.Capacity > 0 and int(r.Capacity) == r.Capacity else None
@@ -206,6 +219,7 @@ def layout_options(row, evidence, capacity, seats, layout, qualifies):
     if not capacity:
         st.info("Confirm a positive whole-number room capacity before comparing layouts.")
         return
+    html('<div class="brief-seat-legend"><i></i>Purple people show the average group while occupied; grey shows remaining seats.</div>')
     columns = st.columns(2, gap="medium")
     current = evaluate_layout(evidence, [capacity])
     for column, label, count, result, key in zip(columns, ["Current room", "Smaller-room option"],
