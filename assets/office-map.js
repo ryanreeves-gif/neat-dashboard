@@ -1,5 +1,7 @@
 export default function(component) {
   const { data, parentElement, setTriggerValue } = component;
+  // Streamlit can render new data into the same host before unmounting it.
+  parentElement.querySelectorAll('.office-map-widget').forEach(previous => previous.remove());
   const root = document.createElement('section');
   root.className = 'office-map-widget';
   root.setAttribute('aria-label', 'London office map and product labels');
