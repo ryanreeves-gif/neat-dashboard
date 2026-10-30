@@ -28,30 +28,30 @@ The current CSV URL is retained in `workplace/data.py`. To use a different sourc
 
 Required columns: `Timestamp`, `Room Name`, `Location`. Other fields: `Occupancy`, `Capacity`, `Device Status`, `Temperature`, `Humidity`, `Light Level`, `VOC`, `Platform`, `Software Version`. Missing sensor fields stay unknown. A source without device status is explicitly marked unreported; the app then cannot exclude offline readings.
 
-The feed is cached for ten minutes. Sidebar → Data source → Refresh observations reloads it. A failed connection displays an error. Demonstration data is used only after an explicit opt-in, is clearly labelled, and is never substituted silently.
+The feed is cached for ten minutes. Presenter tools → Data source → Refresh observations reloads it. A failed connection displays an error. Demonstration data is used only after an explicit opt-in, is clearly labelled, and is never substituted silently.
 
 ## Experience
 
-The app opens in **Presentation view**, a compact four-chapter executive briefing. Switch it off in the sidebar for the complete dashboard. Scope, data-quality detail, calculation notes and savings assumptions remain available in sidebar expanders or popovers, rather than taking space from the main visual story. The layout targets a laptop/monitor canvas; narrower screens stack cards without clipping information.
+The app opens in **Presentation view**, a compact four-chapter executive briefing. Location, room, date and operating-hours filters stay visible. One collapsed **Presenter tools** section contains advanced settings, methodology, financial assumptions and the switch to the complete dashboard. No submenu or tab change is needed during the four-page story. The layout targets a laptop/monitor canvas; narrower screens stack cards without clipping information.
 
 | Webinar timing | Chapter | Decision and demonstration |
 | --- | --- | --- |
 | 0:00–2:00 | Current state | Show the room map, usage/sample-rating leaders and the room-specific recommended next step. |
-| 2:00–4:00 | Room fit | Follow one room, its automatically matched capacity peer, and the visual layout replay. |
+| 2:00–4:00 | Room fit | See current and proposed room layouts immediately, with an automatic capacity-peer comparison. |
 | 4:00–6:00 | Experience | Separate employee and guest sample sentiment; submit one response on the already-open portrait companion. |
-| 6:00–8:00 | Improve | Run one AC simulation; at 7:15 switch to Pilot & outcomes and close on an owner, baseline and success measures. |
+| 6:00–8:00 | Improve | Read Check → Try → Measure beside the simulation; run one example and close on the owner and outcome to prove. |
 | 8:00–10:30 | How we built it | Customer questions, Google Sheet observations, Python/Streamlit/Plotly, ChatGPT-assisted iteration, GitHub and Streamlit hosting. |
 
-The sidebar's Presenter guide contains these cues. Each chapter has a next link. Use one room through the story, and retain deeper pages for questions. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
+Presenter tools → Timing and talking points contains these cues. Each chapter has a next link. Use one room through the story, and retain deeper pages for questions. A live pilot should compare real room demand, comfort, actual cost/energy and genuine feedback before and after the change. No dashboard metric alone establishes whether a commute is worthwhile.
 
 The compact workflow reuses coverage-screened findings. A user can also explore a clearly labelled simulation without a qualifying signal; this does not authorise an intervention. Simulation results are tied to room, dates, hours, thresholds and evidence; changing that configuration removes the displayed result. No command is sent, no ServiceNow ticket is created and no saving is measured. The financial example is opt-in and independent of this control simulation.
 
 ### Webinar decision and reliability improvements
 
 - Overview recommends a scoped investigation for the selected/default room, with an owner and measurement goal. Recommendations follow the location/room/date scope; they never use synthetic sentiment to justify building changes.
-- Improve → **Pilot & outcomes** provides Validate → Trial → Review, proposed owners, a planning scorecard and the missing ingredients of the business case. The After column describes evidence to collect, not fabricated results. Only an entered case for that exact room can appear here; illustrative or other-room cases cannot become its forecast.
+- Improve places one recommended first step, its owner and Check → Try → Measure alongside a single Run example button. Simulation settings and the business case are in Presenter tools. Operating-schedule checks come before layout spending when both signals qualify. Only an entered case for that exact room can appear in its business-case detail; illustrative or other-room cases cannot become its forecast.
 - Room layout and operating-schedule proposals require a qualifying finding, at least 70% occupancy coverage and two observed hours. Otherwise the proposal is to build the evidence baseline. Booking and unmet demand, genuine feedback and actual energy/cost remain unconnected and are explicitly identified as pilot inputs.
-- **Data source → Hold data for presentation** is opt-in. It retains the successfully loaded observations in the current browser session across pages; filters remain interactive. A visible Held snapshot label distinguishes it from normal refresh mode. Refresh observations replaces the snapshot, while source/parser/demo changes invalidate it. Turn the hold off after presenting. It is not a durable offline backup.
+- **Presenter tools → Data source → Hold data for presentation** is opt-in. It retains the successfully loaded observations in the current browser session across pages; filters remain interactive. A visible Held snapshot label distinguishes it from normal refresh mode. Refresh observations replaces the snapshot, while source/parser/demo changes invalidate it. Turn the hold off after presenting. It is not a durable offline backup.
 - Before rehearsal, select fixed Custom dates, enable the hold, load every chapter and reset the form and simulation. Record a backup using the webinar's screen-sharing setup.
 
 The full dashboard remains available:

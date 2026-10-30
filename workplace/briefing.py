@@ -22,12 +22,12 @@ from workplace.pilot import pilot_options, pilot_plan, scoped_case
 CHAPTERS = [
     ("Overview", "app.py", "The current state", "How are your spaces performing?",
      "Understand demand. Protect the experience. Decide where to invest."),
-    ("Spaces", "pages/Spaces.py", "The right space", "The right space for the way people work.",
+    ("Spaces", "pages/Spaces.py", "The right space", "Does the room fit the group?",
      "Match investment to real demand, then test a change before committing."),
     ("Feedback", "pages/Feedback.py", "The experience", "Give people a reason to come together.",
      "Listen to employees and guests. Find the friction. Protect what they value."),
-    ("Environment", "pages/Environment.py", "The next move", "Turn an observation into an improvement.",
-     "Choose one pilot, name the owners and agree what success will look like."),
+    ("Environment", "pages/Environment.py", "The next move", "What should we do next?",
+     "One room. One practical change. A result you can measure."),
 ]
 
 
@@ -65,7 +65,7 @@ def steps(rows, done=False):
 
 def finance_case(ctx):
     cases = x.planning_cases(st.session_state, ctx["inventory"]["Room key"])
-    with st.sidebar.expander("Savings assumptions"):
+    with ctx["tools"].expander("Savings assumptions"):
         if cases:
             ids = [r["id"] for r in cases]
             chosen = st.session_state.get("overview_case")
@@ -120,7 +120,7 @@ def leader_card(portfolio, measure):
     detail = (f"{row['Occupied hours']:.1f} occupied hours · {row['Coverage %']:.0f}% coverage" if is_use
               else f"{row.Responses} invented responses · {row.Positive:.0f}% positive")
     if len(rows) > 1:
-        detail = f"{len(rows)} rooms tied · full scores in ‘How to read the room picture’"
+        detail = f"{len(rows)} rooms tied · full scores in Presenter tools"
     source = "Observed time in use" if is_use else "Synthetic space-experience ratings"
     html(f'<article class="brief-leader {"use" if is_use else "rating"}"><div class="brief-label">{label}</div>'
          f'<div class="brief-leader-main"><h3>{escape(names)}</h3><strong>{score}</strong></div>'
@@ -129,13 +129,7 @@ def leader_card(portfolio, measure):
 
 
 def summary(ctx, case):
-    controls, audience_col = st.columns([1.25, 1], vertical_alignment="center")
-    with controls:
-        view = st.segmented_control("Estate view", ["Current state", "Improvement choices"], required=True,
-            label_visibility="collapsed", **u.field_state("brief_estate_view", "Current state"))
-    with audience_col:
-        audience = st.selectbox("Sentiment audience", ["Everyone", *AUDIENCES],
-            **u.field_state("feedback_audience", "Everyone"))
+    audience = st.session_state.get("feedback_audience", "Everyone")
     records = c.feedback_in_scope(ctx, audience=audience)
     portfolio = p.room_portfolio(ctx, records)
     feedback = feedback_summary(records)
@@ -149,28 +143,25 @@ def summary(ctx, case):
          case["room"] if case else "Scope and cost one pilot",
          "Illustrative assumptions" if case and case["example"] else "Entered assumptions" if case else "No measured cost or energy saving", "sunrise", not bool(case)),
     ])
-    if view == "Improvement choices":
-        improvement_choices(ctx, portfolio)
-    else:
-        left, right = st.columns([1.9, 1], gap="medium")
-        with left, st.container(key="brief_panel_portfolio"):
-            heading("Room use meets room experience", "Each bubble is a room · size reflects capacity · colour shows the review route")
-            plotted = p.comparison_rows(portfolio)
-            if plotted.empty:
-                st.info("No room has both enough occupancy evidence and five sample responses in this scope. The separate leaders can still be assessed independently.")
-            else:
-                fig = p.performance_figure(portfolio, ctx["summary"]["utilisation"], u.FONT)
-                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="brief_portfolio_plot")
-                html(f'<div class="brief-small">Showing {len(plotted)} of {len(portfolio)} rooms · rating detail: {fig.layout.meta["rating_axis_floor"]:g}–5 of 5. Dotted lines: estate use and a 4/5 rating. Sentiment is invented.</div>')
-        with right:
-            leader_card(portfolio, "usage")
-            leader_card(portfolio, "sentiment")
-            preferred_room(ctx)
-            plan = pilot_plan(ctx, st.session_state["selected_room"])
-            html(f'<article class="brief-recommendation"><div class="brief-label">RECOMMENDED NEXT STEP · {escape(plan["name"])}</div>'
-                 f'<h3>{escape(plan["title"])}</h3><p>{escape(plan["action"])}</p>'
-                 f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
-    with st.sidebar.expander("How to read the room picture"):
+    left, right = st.columns([1.9, 1], gap="medium")
+    with left, st.container(key="brief_panel_portfolio"):
+        heading("Room use meets room experience", "Each bubble is a room · size reflects capacity · colour shows the review route")
+        plotted = p.comparison_rows(portfolio)
+        if plotted.empty:
+            st.info("No room has both enough occupancy evidence and five sample responses in this scope. The separate leaders can still be assessed independently.")
+        else:
+            fig = p.performance_figure(portfolio, ctx["summary"]["utilisation"], u.FONT)
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="brief_portfolio_plot")
+            html(f'<div class="brief-small">Showing {len(plotted)} of {len(portfolio)} rooms · rating detail: {fig.layout.meta["rating_axis_floor"]:g}–5 of 5. Dotted lines: estate use and a 4/5 rating. Sentiment is invented.</div>')
+    with right:
+        leader_card(portfolio, "usage")
+        leader_card(portfolio, "sentiment")
+        preferred_room(ctx)
+        plan = pilot_plan(ctx, st.session_state["selected_room"])
+        html(f'<article class="brief-recommendation"><div class="brief-label">RECOMMENDED NEXT STEP · {escape(plan["name"])}</div>'
+             f'<h3>{escape(plan["title"])}</h3>'
+             f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
+    with ctx["tools"].expander("Room evidence and methodology"):
         st.write("Usage leaders need positive capacity, at least 70% occupancy coverage and two observed hours. The estate percentage pools all valid observed hours. Missing time is unknown, not empty.")
         st.write("Sample sentiment leaders need at least five responses and are independent of telemetry coverage. Usage ties use one decimal place; sentiment ties use two. An audience filter changes ratings, never usage or improvement signals.")
         st.write("The map only includes rooms passing both checks. Bubble sizes reflect recorded capacity; colour shows a possible review route. Reference lines are guides, not performance targets. Short periods and sample ratings cannot establish the best room design.")
@@ -178,132 +169,39 @@ def summary(ctx, case):
         st.dataframe(portfolio[["Room key", "Utilisation %", "Coverage %", "Responses", "Sentiment", "Route"]], hide_index=True, width="stretch")
 
 
-def improvement_choices(ctx, portfolio):
-    candidates = p.opportunity_rows(portfolio)
-    left, right = st.columns([1, 1.35], gap="medium")
-    with left, st.container(key="brief_panel_matrix"):
-        heading("Where could a change help?", "Coloured cells show a review signal. A room can have both routes.")
-        if candidates.empty:
-            st.info("No qualifying controls or layout signals in this scope. Monitor use and collect real feedback before proposing a change.")
-        else:
-            st.plotly_chart(p.opportunity_figure(portfolio, u.FONT), width="stretch", config={"displayModeBar": False}, key="brief_opportunity_plot")
-        limited = int(portfolio["Coverage %"].fillna(0).lt(70).sum())
-        html(f'<div class="brief-small">{limited} room(s) below 70% coverage excluded from recommendations. No flag means no qualifying signal in this period.</div>')
-    with right, st.container(key="brief_panel_routes"):
-        heading("Choose the right intervention")
-        if candidates.empty:
-            steps([("Strengthen the baseline", "Confirm reporting, room purpose and a representative period."),
-                   ("Listen in the space", "Collect real employee and guest feedback."),
-                   ("Agree a measurable pilot", "Use, comfort, satisfaction and metered cost before and after.")])
-            return
-        options = candidates["Room key"].tolist()
-        if st.session_state.get("brief_improve_room") not in options:
-            previous = st.session_state.get("selected_room")
-            st.session_state["brief_improve_room"] = previous if previous in options else options[0]
-        room = st.selectbox("Room to improve", options, label_visibility="collapsed",
-                            **u.field_state("brief_improve_room", options[0]))
-        row = candidates.set_index("Room key").loc[room]
-        if row.Controls:
-            signals = []
-            if row.Warm:
-                signals.append(f"{row['Warm hours']:.1f} h warm while empty")
-            if row.Light:
-                signals.append(f"{row['Light hours']:.1f} h bright while empty")
-            signal = " · ".join(signals)
-            route_card("01", "Controls / BMS review", signal,
-                       "Check schedules and room-to-zone controls; trial occupancy-led HVAC or lighting where suitable.",
-                       "Facilities + IT · validate vacancy, bookings, comfort and integration. Meter the result.", "controls")
-            if st.button("Explore the controls pilot", key="brief_to_controls", width="stretch"):
-                st.session_state["selected_room"] = room
-                st.session_state["brief_condition"] = "warm" if row.Warm else "light"
-                st.switch_page("pages/Environment.py")
-        else:
-            html('<div class="brief-small"><b>Controls:</b> no qualifying vacancy-condition signal in this period.</div>')
-        if row.Layout:
-            seats = max(1, int(row.Capacity / 2))
-            evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
-            replay = evaluate_layout(evidence, [seats])
-            route_card("02", "Room configuration review",
-                       f"90% of occupied time: {u.fmt(row['P90 attendance'])} people or fewer / {u.fmt(row.Capacity)} seats",
-                       f"Test a {seats}-seat option: it fits {u.fmt(replay['fit_percent'], '%', 1)} of observed occupied time.",
-                       f"Workplace + IT · observed peak {u.fmt(evidence['peak'])}. Validate demand, purpose, acoustics and accessibility.", "layout")
-            if st.button("Compare room layouts", key="brief_to_layout", width="stretch"):
-                st.session_state["selected_room"] = room
-                st.session_state["brief_space_view"] = "Layout options"
-                st.switch_page("pages/Spaces.py")
-        else:
-            html('<div class="brief-small"><b>Layout:</b> no qualifying capacity-fit signal in this period.</div>')
-        with st.popover("What needs validating?", icon=":material/info:", width="stretch"):
-            st.write("A BMS link may be an operational change, but it is not automatically simple: existing controls, room-to-zone mapping, permissions, schedules and comfort constraints determine feasibility. Warm or bright does not by itself prove wasted energy; daylight can explain lux readings.")
-            st.write("Reconfiguration is a design and investment decision. Test booking demand, peak groups, room purpose, dimensions, accessibility, acoustics and AV before costing partitions or changing capacity. A second room's future use cannot be inferred from this feed.")
-            st.write("Where both routes apply, assess controls feasibility and room purpose first. Use a reversible pilot where appropriate, then decide whether a capital project is justified. Set an owner, budget, baseline and review date.")
-            st.caption("The two condition-hour values can overlap. Review routes use telemetry; invented sentiment is not evidence for a building change or financial saving.")
-
-
-def route_card(number, title, evidence, action, validation, kind):
-    html(f'<article class="brief-route {kind}"><div class="brief-route-title"><span>{number}</span><b>{escape(title)}</b></div>'
-         f'<strong>{escape(evidence)}</strong><p>{escape(action)}</p><small>{escape(validation)}</small></article>')
-
-
 def space(ctx, case):
-    left, right = st.columns([1.1, 1], gap="medium", vertical_alignment="center")
-    with left:
-        room = room_picker(ctx)
+    room = room_picker(ctx)
     r = ctx["stats"].set_index("Room key").loc[room]
     evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
-    room_capacity = int(r.Capacity) if pd.notna(r.Capacity) and r.Capacity > 0 and int(r.Capacity) == r.Capacity else None
-    default = min(100, max(1, int(room_capacity / 2))) if room_capacity else 4
+    capacity = int(r.Capacity) if pd.notna(r.Capacity) and r.Capacity > 0 and int(r.Capacity) == r.Capacity else None
+    default = min(100, max(1, int(capacity / 2))) if capacity else 4
     model_key = "brief_seats_" + sha256(room.encode()).hexdigest()[:12]
-    with right:
-        with st.popover("Test a smaller-room option", icon=":material/tune:", width="stretch"):
-            seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(model_key, default))
-            st.caption("Replays observed groups in one proposed room. It does not predict demand, extra meetings or financial savings.")
+    with ctx["tools"].expander("Room comparison settings"):
+        seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(model_key, default))
+        st.caption("Replays observed groups. It does not predict new bookings, savings or demand for a second room.")
+        st.page_link("pages/Scenarios.py", label="Explore other layouts", icon=":material/compare_arrows:")
     layout = evaluate_layout(evidence, [seats])
-    view = st.segmented_control("Room view", ["Performance", "Layout options"], required=True,
-        label_visibility="collapsed", **u.field_state("brief_space_view", "Performance"))
-    if view == "Layout options":
-        layout_options(r, evidence, room_capacity, seats, layout)
-        return
-    title, detail, tone = c.room_story(r)
-    takeaway(title, detail, tone == "sunrise")
-    left, right = st.columns([1, 1.1], gap="medium")
-    with left, st.container(key="brief_panel_seats"):
-        heading(f"{r['Room Name']} · {u.fmt(r.Capacity)} seats", "The typical group, drawn against the recorded capacity")
-        if room_capacity and pd.notna(r["Typical attendance"]):
-            svg = v.room_capacity_svg(r["Typical attendance"], room_capacity).replace(v.BLUE, "#5F259F").replace("Blue represents", "Purple represents")
-            st.image(svg, width=350)
-        else:
-            st.info("Valid attendance and capacity are needed for the room illustration.")
-        html(f'<div class="brief-seat-caption"><span><strong>{u.fmt(r["Typical attendance"], digits=1)}</strong>typical people when occupied</span><span><strong>{u.fmt(r["P90 attendance"])}</strong>people or fewer for 90% of occupied time</span></div>')
-        html(f'<div class="brief-small">{r["Coverage %"]:.0f}% occupancy coverage · source-clock period above</div>')
-    with right, st.container(key="brief_panel_peer"):
-        heading("A similar room. Automatically.")
-        data = ctx["all_data"]
-        if not ctx["demo"]:
-            data = data[data.Location.isin(["London EC", "Oslo EC"])]
-        pair = cached_peer(data, ctx["fetched"], room, ctx["start"], ctx["end"], ctx["office"])
-        if pair:
-            html('<div class="brief-pair">' + ''.join(f'<div><span>{escape(row["Room Name"])} · {u.fmt(row.Capacity)} seats</span><strong>{u.fmt(row["Utilisation %"], "%")}</strong><span>time in use · {u.fmt(row["Coverage %"], "%")} coverage</span><span>{escape(row.Location)}</span></div>' for row in pair) + '</div>')
-            if any(pd.isna(row["Coverage %"]) or row["Coverage %"] < 70 for row in pair):
-                html('<div class="brief-small"><b>Limited coverage:</b> interpret this peer comparison cautiously.</div>')
-        else:
-            st.write("No capacity peer is available for this period.")
-        fit = layout["fit_percent"]
-        html(f'<div class="brief-device"><b>A {seats}-seat room would fit {u.fmt(fit, "%", 1)} of observed occupied time.</b>Replay of observed groups; validate peaks, room purpose and accessibility before a change.</div>')
-        with st.popover("Evidence and alternatives", icon=":material/info:", width="stretch"):
-            st.write(f"Observed peak: {u.fmt(evidence['peak'])} people. The proposed room is exceeded for {u.fmt(layout['exceeds_hours'], ' h', 1)} of occupied time.")
-            st.write("The automatic peer uses the closest capacity within 25% or two seats, preferring the same location. The match can come from outside the location filter; dates and operating hours are identical.")
-            st.caption("A capacity match does not control for purpose or equipment. Short periods and poor coverage may not represent demand. Empty and unknown time are excluded from the replay.")
-            st.page_link("pages/Scenarios.py", label="Explore room alternatives", icon=":material/compare_arrows:")
-    plan = pilot_plan(ctx, room, "Room layout")
-    html(f'<div class="brief-insight"><b>{escape(plan["title"])}</b>{escape(plan["gate"])} Owner: {escape(plan["owner"])}.</div>')
+    qualifies = "Room layout" in pilot_options(ctx, room)
+    if qualifies:
+        takeaway(f'{r["Room Name"]}: most groups need fewer seats.',
+                 f'90% of occupied time had {u.fmt(r["P90 attendance"])} people or fewer in this {u.fmt(r.Capacity)}-seat room.')
+    else:
+        takeaway("Check the demand before changing the layout.",
+                 "This view does not establish a room-size recommendation. The comparison below is exploratory.", True)
+    layout_options(r, evidence, capacity, seats, layout, qualifies)
+    data = ctx["all_data"]
+    if not ctx["demo"]:
+        data = data[data.Location.isin(["London EC", "Oslo EC"])]
+    pair = cached_peer(data, ctx["fetched"], room, ctx["start"], ctx["end"], ctx["office"])
+    if pair:
+        comparison = " · ".join(f'{item["Room Name"]} ({item.Location}): {u.fmt(item["Utilisation %"], "%")} in use' for item in pair)
+        html(f'<div class="brief-small"><b>Similar-size room:</b> {escape(comparison)}. Capacity match only; purpose and location can differ.</div>')
 
 
-def layout_options(row, evidence, capacity, seats, layout):
+def layout_options(row, evidence, capacity, seats, layout, qualifies):
     if not capacity:
         st.info("Confirm a positive whole-number room capacity before comparing layouts.")
         return
-    heading(f"{row['Room Name']} · test the space around the group", "Same observed attendance, replayed in the current room and one proposed option")
     columns = st.columns(2, gap="medium")
     current = evaluate_layout(evidence, [capacity])
     for column, label, count, result, key in zip(columns, ["Current room", "Smaller-room option"],
@@ -319,12 +217,10 @@ def layout_options(row, evidence, capacity, seats, layout):
                  f'<div class="brief-small">{u.fmt(result["exceeds_hours"], " h", 1)} exceeds this capacity · typical group {u.fmt(evidence["typical"], digits=1)}</div>')
     if evidence["coverage"] is None or evidence["coverage"] < 70:
         st.warning("Limited occupancy coverage: this replay is exploratory. Restore reporting before recommending a layout change.")
-    html(f'<div class="brief-insight"><b>Decision gate · observed peak {u.fmt(evidence["peak"])} people</b>'
-         'Workplace + IT: check bookings, unmet demand, purpose, acoustics, accessibility and AV. A smaller footprint may release space; future use and financial return need a business case.</div>')
-    with st.popover("Alternatives and replay assumptions", icon=":material/compare_arrows:", width="stretch"):
-        st.write("Keep the current layout, trial furniture changes, or assess a split-room design. Each requires its own capacity, design and cost assessment. This replay treats each observed count as one group and excludes empty, missing and offline time.")
-        st.caption("A second room's demand and simultaneous meetings are unknown. No additional meetings or savings are predicted.")
-        st.page_link("pages/Scenarios.py", label="Model one or two rooms", icon=":material/meeting_room:")
+    next_step = ("Next step: check bookings and peak groups before a layout trial." if qualifies
+                 else "Next step: establish representative demand before recommending a change.")
+    html(f'<div class="brief-insight"><b>{next_step}</b>'
+         f'Observed peak: {u.fmt(evidence["peak"])} people. Workplace + IT should confirm room purpose, accessibility and AV.</div>')
 
 
 def experience(ctx, case):
@@ -333,8 +229,7 @@ def experience(ctx, case):
     all_records = c.feedback_in_scope(ctx)
     left, right = st.columns([1.35, 1], gap="large")
     with left:
-        audience = st.segmented_control("Feedback audience", ["Everyone", *AUDIENCES], required=True, width="stretch",
-                                        label_visibility="collapsed", **u.field_state("feedback_audience", "Everyone"))
+        audience = st.session_state.get("feedback_audience", "Everyone")
         records = all_records if audience == "Everyone" else all_records[all_records.audience.eq(audience)]
         s = feedback_summary(records)
         html('<div class="brief-demo-banner"><b>Sample results:</b> invented responses aligned to the selected rooms and dates. Test submissions appear separately below.</div>')
@@ -370,7 +265,7 @@ def experience(ctx, case):
             html(f'<div class="brief-test-receipt"><b>Your latest test · {escape(response["room_name"])}</b>'
                  f'{escape(response["audience"])} · Space {response["experience"]}/5 · Equipment {response["equipment"]}/5'
                  '<small>Saved in this browser session only · historical sample scores stay separate</small></div>')
-        with st.popover("From prototype to a live pilot", icon=":material/info:", width="stretch"):
+        with ctx["tools"].expander("Companion deployment details"):
             st.write("The companion is ready to try here. Choose employee or guest, rate the space and equipment, then share feedback. Use Next person to clear the form for the next visitor.")
             st.write("For deployment, validate the web app on Neat Frame, connect an authenticated response store and agree who follows up on feedback and IT-help requests. Hardware touch behaviour and live integrations have not been tested.")
             st.page_link("pages/Frame.py", label="Open the full portrait screen", icon=":material/open_in_full:")
@@ -398,174 +293,81 @@ def action(ctx, case):
     from workplace.control_demo import KINDS, scenario, animation_html
     import streamlit.components.v1 as components
 
-    view = st.segmented_control("Improvement view", ["Control simulation", "Pilot & outcomes"], required=True,
-        label_visibility="collapsed", **u.field_state("brief_action_view", "Control simulation"))
-    if view == "Pilot & outcomes":
-        pilot_outcomes(ctx, case)
-        return
-    left, right = st.columns([1.3, 1], gap="medium", vertical_alignment="center")
-    with left:
-        room = room_picker(ctx)
-    with right:
+    room = room_picker(ctx)
+    plan = pilot_plan(ctx, room)
+    options = pilot_options(ctx, room)
+    with ctx["tools"].expander("Simulation settings"):
         kind = st.selectbox("Control to simulate", list(KINDS), format_func=KINDS.get,
-                            label_visibility="collapsed", **u.field_state("brief_condition", "warm"))
+                            **u.field_state("brief_condition", "warm"))
+        temperature = st.slider("AC setpoint (°C)", 16.0, 28.0, step=.5, **u.field_state("brief_ac_target", 21.0))
+        brightness = st.slider("Lighting output (%)", 0, 100, step=10, **u.field_state("brief_light_target", 20))
+        boost = st.slider("Ventilation boost (%)", 20, 100, step=10, **u.field_state("brief_air_boost", 80))
+        duration = st.slider("Override duration (minutes)", 5, 60, step=5, **u.field_state("brief_control_minutes", 15))
+        start_temperature = st.number_input("Starting room temperature (demo °C)", min_value=10.0, max_value=40.0, step=.5,
+                                            **u.field_state("brief_start_temperature", 26.0))
+        st.caption("Starting controls and response curves are invented. Lux does not prove lights are on; the air indicator is not measured CO₂ or a health score.")
     signal = action_signal(ctx, room, kind)
     row = ctx["inventory"].set_index("Room key").loc[room]
-    html('<div class="brief-demo-banner"><b>Interactive simulation:</b> adjust the controls and watch the room respond. Settings, response timing and outcomes are illustrative. No commands are sent.</div>')
-    cols = st.columns([.85, 1, 1.6], gap="medium")
-    with cols[0], st.container(key="brief_panel_signal"):
-        heading("01 · Read the room")
-        sensor, label, unit = {"warm": ("Temperature", "Recorded temperature", "°C"),
-                               "light": ("Light Level", "Recorded light level", "lux"),
-                               "purge": ("VOC", "Recorded VOC", "source units")}[kind]
-        value = row.get(sensor)
-        html(f'<div class="brief-label">{label}</div><div class="brief-evidence-number" style="font-size:36px;margin:14px 0 5px">{u.fmt(value, digits=1)}<small> {unit}</small></div>'
-             f'<div class="brief-small">{"Sample sensor record" if ctx["demo"] else "Historical sensor record"}<br>{row.Timestamp:%d %b %Y, %H:%M}<br>{escape(str(row["Device Status"]))} · source clock</div>')
-        if signal:
-            html(f'<div class="brief-device"><b>{signal["Evidence hours"]:.1f} h of qualifying evidence</b>{escape(signal["Evidence"])}. Investigate actual operating state.</div>')
-        elif kind == "purge":
-            html('<div class="brief-device"><b>Explore a ventilation response</b>The demo air indicator starts at 100 relative units. It is invented and separate from the VOC reading.</div>')
+    settings = scenario(kind, duration, temperature, brightness, boost, start_temperature)
+    config = {**simulation_config(ctx, room, kind, signal), "settings": settings}
+    signature = json.dumps(config, sort_keys=True)
+    result = st.session_state.get("brief_workflow")
+    if result and result["signature"] != signature:
+        st.session_state.pop("brief_workflow", None)
+        result = None
+    left, right = st.columns([1, 1.5], gap="medium")
+    with left, st.container(key="brief_panel_recommendation"):
+        html(f'<div class="brief-label">RECOMMENDED FIRST STEP · {escape(plan["name"])}</div>'
+             f'<h2 class="brief-direct-answer">{escape(plan["title"])}</h2>')
+        findings = x.improvement_summary(ctx)["issues"]
+        findings = findings[findings["Room key"].eq(room)]
+        if plan["focus"] == "Operating schedules":
+            warm = findings[findings.Kind.eq("warm")]
+            light = findings[findings.Kind.eq("light")]
+            observed = warm.iloc[0] if not warm.empty else light.iloc[0]
+            condition = "warm" if observed.Kind == "warm" else "bright"
+            html(f'<div class="brief-why"><strong>{observed["Evidence hours"]:.1f} h</strong><span>{condition} while recorded empty</span></div>')
+            st.caption("A reason to check actual controls and schedules; not proof of wasted energy.")
         else:
-            html('<div class="brief-device"><b>User-selected scenario</b>No qualified review signal for this selection. You can still explore the visual simulation.</div>')
-        with st.popover("Evidence & live-pilot checks", icon=":material/info:", width="stretch"):
-            st.write("The recorded value is a historical snapshot, not a live control reading. The simulation starts from separate, labelled assumptions. Room temperature is not the AC setpoint; lux is not a lighting-output percentage.")
-            st.write("VOC units need validating and this feed does not supply measured CO₂. The demo air indicator is not a health score or a forecast of pollutant removal.")
-            st.write("For a live pilot, validate room-to-zone mapping, actual occupancy and bookings, site permissions, comfort limits and the expiry/restore behaviour. Measure the real effect before reporting energy or satisfaction benefits.")
-        with st.popover("Business case", icon=":material/finance_mode:", width="stretch"):
-            pilot_finance(case)
-    with cols[1], st.container(key="brief_panel_workflow"):
-        heading("02 · Connect the response", "Choose an override, then run the simulation")
-        if kind == "warm":
-            temperature = st.slider("AC setpoint (°C)", 16.0, 28.0, step=.5,
-                                    **u.field_state("brief_ac_target", 21.0))
-        else:
-            temperature = 21.0
-        if kind == "light":
-            brightness = st.slider("Lighting output (%)", 0, 100, step=10,
-                                   **u.field_state("brief_light_target", 20))
-            st.caption("0% switches the demo lights off. 100% is full output.")
-        else:
-            brightness = 20
-        if kind == "purge":
-            boost = st.slider("Ventilation boost (%)", 20, 100, step=10,
-                              **u.field_state("brief_air_boost", 80))
-            st.caption("A timed air-purge scenario using an invented response curve.")
-        else:
-            boost = 80
-        duration = st.slider("Override duration (minutes)", 5, 60, step=5,
-                             **u.field_state("brief_control_minutes", 15))
-        with st.popover("Scenario starting values", icon=":material/tune:", width="stretch"):
-            start_temperature = st.number_input("Starting room temperature (demo °C)", min_value=10.0, max_value=40.0, step=.5,
-                                                **u.field_state("brief_start_temperature", 26.0))
-            st.caption("Assumed schedule: AC setpoint 24°C, lights 80%, ventilation 30%. The demo air indicator starts at 100. These values do not come from the room's controllers.")
-        settings = scenario(kind, duration, temperature, brightness, boost, start_temperature)
-        config = {**simulation_config(ctx, room, kind, signal), "settings": settings}
-        signature = json.dumps(config, sort_keys=True)
-        result = st.session_state.get("brief_workflow")
-        if result and result["signature"] != signature:
-            st.session_state.pop("brief_workflow", None)
-            result = None
-        if st.button("Run simulation", key="brief_run", type="primary", width="stretch"):
+            html(f'<div class="brief-small">{escape(plan["action"])}</div>')
+        steps([( "Check", plan["gate"]), ("Try", plan["action"]), ("Measure", plan["measure"])])
+        html(f'<div class="brief-owner"><b>Owner</b><span>{escape(plan["owner"])}</span></div>')
+        if "Room layout" in options and plan["focus"] != "Room layout":
+            html('<div class="brief-small"><b>Then consider the layout.</b> Validate bookings and peak demand before spending on a smaller-room design.</div>')
+        html('<div class="brief-small"><b>Value to prove:</b> better use and experience, with any cost saving measured against the baseline.</div>')
+    with right, st.container(key="brief_panel_control_preview"):
+        heading("See how a response could work", "Illustrative example · no commands are sent")
+        target = f"{temperature:g}°C" if kind == "warm" else f"{brightness}% output" if kind == "light" else f"{boost}% boost"
+        if st.button(f"Run example · {KINDS[kind]} · {target} · {duration} min", key="brief_run", type="primary", width="stretch"):
             result = {"signature": signature, "payload": {**config, "created_at": datetime.now(timezone.utc).isoformat(),
                       "stages": ["Demo request", "Simulated review", "Simulated override", "Assumed schedule restored"]}}
             st.session_state["brief_workflow"] = result
-        if st.button("Reset simulation", key="brief_reset", width="stretch", disabled=result is None):
-            st.session_state.pop("brief_workflow", None)
-            result = None
-        html('<div class="brief-small"><b>Watch the room change</b><br>Pause the animation or move its timeline to inspect the override. At expiry, the assumed control schedule is restored.</div>')
-        with st.popover("What would connect in practice?", icon=":material/hub:", width="stretch"):
-            steps([("Pulse · room evidence", "Provides the observation and room identity."),
-                   ("ServiceNow · reviewed request", "Would validate policy, vacancy and the selected settings."),
-                   ("BMS gateway · temporary override", "Would apply a permitted command and return acknowledgement."),
-                   ("Verify · measured response", "Would check actual conditions, comfort and energy use.")])
-            st.caption("All four steps are represented locally. No ServiceNow ticket or BMS acknowledgement is real.")
-    with cols[2], st.container(key="brief_panel_control_preview"):
-        heading("03 · See the response", "Play, pause or scrub the simulated timeline")
-        components.html(animation_html(settings, row["Room Name"], result["payload"]["created_at"] if result else None),
-                        height=505, scrolling=False)
-    if st.button("Choose the pilot and success measures", key="brief_to_pilot", width="stretch"):
-        st.session_state["brief_action_view"] = "Pilot & outcomes"
-        st.rerun()
-
-
-def pilot_outcomes(ctx, case):
-    left, right = st.columns([1.3, 1], gap="medium")
-    with left:
-        room = room_picker(ctx)
-    options = pilot_options(ctx, room)
-    if st.session_state.get("brief_pilot_focus") not in options:
-        st.session_state["brief_pilot_focus"] = options[0]
-    with right:
-        focus = st.selectbox("Pilot focus", options, label_visibility="collapsed",
-                             **u.field_state("brief_pilot_focus", options[0]))
-    plan = pilot_plan(ctx, room, focus)
-    row = ctx["stats"].set_index("Room key").loc[room]
-    takeaway(f'{plan["name"]} · {plan["title"]}',
-             f'Proposed owner: {plan["owner"]}. Sponsor: Workplace / COO; Finance validates the business case.',
-             focus == "Evidence baseline")
-    html('<div class="brief-pilot-stages">' + ''.join(
-        f'<article><span>{number}</span><div><h3>{escape(title)}</h3><p>{escape(detail)}</p></div></article>'
-        for number, title, detail in [
-            ("01", "Validate", plan["gate"]),
-            ("02", "Trial", plan["action"]),
-            ("03", "Review", plan["success"]),
-        ]) + '</div>')
-    left, right = st.columns([1.5, 1], gap="medium")
-    with left, st.container(key="brief_panel_outcomes"):
-        heading("Agree the measures before the change", "Planning scorecard · no pilot has been measured by this dashboard")
-        usage = (f'{u.fmt(row["Utilisation %"], "%", 1)} time in use · '
-                 f'{u.fmt(row["Coverage %"], "%")} coverage')
-        demand = (f'90% of occupied time: ≤{u.fmt(row["P90 attendance"])} people'
-                  if pd.notna(row["P90 attendance"]) else 'Attendance evidence needed')
-        measures = [
-            ("Space & demand", usage + "; " + demand, "Repeat use / capacity checks; add bookings and unmet demand"),
-            ("People & comfort", "Real feedback not collected here", "Compare real ratings, recurring issues and comfort"),
-            ("Cost & energy", "Measured baseline not connected", "Compare actual costs / energy; account for pilot costs"),
-        ]
-        html('<div class="brief-scorecard"><div class="brief-score-head"><span>Outcome</span><span>Before · selected scope</span><span>After · to collect</span></div>' + ''.join(
-            f'<div class="brief-score-row"><b>{escape(label)}</b><span>{escape(before)}</span><span>{escape(after)}</span></div>'
-            for label, before, after in measures) + '</div>')
-        html(f'<div class="brief-small">{escape(plan["source"])} · match dates, operating hours and room purpose when comparing. Agree targets, budget and a review date before starting.</div>')
-    with right, st.container(key="brief_panel_pilot_value"):
-        heading("Build an investable case")
-        html(f'<div class="brief-value-block"><span>Potential value</span><b>{escape(plan["benefit"])}</b></div>'
-             f'<div class="brief-value-block"><span>Cost to establish</span><b>{escape(plan["cost"])}</b></div>')
+        components.html(animation_html(settings, row["Room Name"], result["payload"]["created_at"] if result else None), height=505, scrolling=False)
+    with ctx["tools"].expander("Pilot details and business case"):
+        st.write(plan["success"])
+        st.caption("Agree targets, budget and review date. Collect real feedback, bookings and actual energy/cost before and after. No measured pilot outcome is connected here.")
         matched = scoped_case(case, room)
         if matched:
-            payback = "No positive payback" if matched["payback_months"] is None else f'{matched["payback_months"]:.1f} months payback'
-            html(f'<div class="brief-value-block"><span>Entered assumptions · {escape(room)}</span>'
-                 f'<b>{money(matched["annual_net"], matched["currency"])} annual net benefit</b><small>{payback} · not measured</small></div>')
+            st.write(f'Entered case for {room}: {money(matched["annual_net"], matched["currency"])} annual net benefit. Assumptions only; not measured.')
         else:
-            html('<div class="brief-value-block"><span>Financial return</span><b>To quantify for this pilot</b><small>Enter project cost, cash benefit and ongoing cost.</small></div>')
-        if st.button("Cost this room's pilot", key="brief_cost_pilot", width="stretch"):
-            st.switch_page("pages/Value.py")
-        st.caption("Released space is not automatically a cash saving. Energy needs metering; productivity needs separate evidence.")
-    html('<div class="brief-closing"><b>The decision today: agree one scoped pilot.</b><span>Name an owner · establish the baseline · review the result · scale only when justified</span></div>')
-
-
-def pilot_finance(case):
-    heading("Prove the value")
-    if case:
-        html(f'<div class="brief-source assumption">{"ILLUSTRATIVE" if case["example"] else "ENTERED"} FINANCIAL ASSUMPTIONS</div>'
-             f'<div class="brief-evidence-number" style="color:#5F259F;font-size:30px">{money(case["annual_net"], case["currency"])}</div>'
-             f'<div class="brief-small">Annual net benefit · {escape(case["room"])}</div>')
-        payback = "No payback" if case["payback_months"] is None else f"{case['payback_months']:.1f} months"
-        st.write(f"{payback} simple payback. {money(case['project_cost'], case['currency'])} initial investment; {money(case['net_benefit'], case['currency'])} {case['years']}-year net benefit.")
-        st.caption("Separate planning assumptions. The control simulation does not generate these savings.")
-    else:
-        st.write("Add project costs and cash-saving assumptions, then compare measured outcomes with the baseline.")
-        if st.button("Show illustrative savings", key="brief_show_savings", width="stretch"):
-            st.session_state["overview_example"] = True
+            st.write("Financial return is still to quantify for this room. Enter the project cost, expected cash benefit and ongoing cost.")
+        st.page_link("pages/Value.py", label="Cost this room's pilot", icon=":material/finance_mode:")
+        st.caption("A live control link needs room-to-zone mapping, permissions, comfort limits and facilities ownership. The simulation creates no ticket, acknowledgement or measured saving.")
+        if st.button("Reset simulation", key="brief_reset", disabled=result is None):
+            st.session_state.pop("brief_workflow", None)
             st.rerun()
-    st.page_link("pages/Value.py", label="Open the full investment model", icon=":material/finance_mode:")
-    st.caption("Agree a room, facilities and IT owners, a baseline, a budget and a review date. Assess use, comfort, real feedback and metered energy/cost before and after.")
+    html('<div class="brief-closing"><b>Start with one room. Make one change. Measure the difference.</b><span>Agree the owner, baseline and review date before starting.</span></div>')
+
 
 def run(active):
     index = next(i for i, row in enumerate(CHAPTERS) if row[0] == active)
     _, _, _, title, subtitle = CHAPTERS[index]
-    u.shell(active, title, subtitle, briefing=True)
+    tools = u.shell(active, title, subtitle, briefing=True)
     with st.container(key="brief_filters"):
-        ctx = u.context(show_evidence=False, sidebar_details=True)
+        ctx = u.context(show_evidence=False, sidebar_details=True, details_container=tools)
+    ctx["tools"] = tools
+    with tools:
+        st.selectbox("Sentiment audience", ["Everyone", *AUDIENCES], **u.field_state("feedback_audience", "Everyone"))
     case = finance_case(ctx)
     locations = ", ".join(sorted(ctx["inventory"].Location.unique()))
     # The analysis boundary can be midnight on the following day; show the

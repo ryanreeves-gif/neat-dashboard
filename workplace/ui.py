@@ -33,59 +33,62 @@ def shell(active, title, subtitle, briefing=False):
     from workplace.customer import PURPOSE
     st.set_page_config(page_title=f"Neat | {active}", page_icon=str(ROOT / "assets/neat-logo.svg"), layout="wide")
     st.html(brand_css())
+    presentation = bool(st.session_state.get("presentation_mode", True))
+    groups = [
+        ("Understand", [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
+                        ("pages/Feedback.py", "Feedback", "sentiment_satisfied"), ("pages/Environment.py", "Environment", "thermostat")]),
+        ("Improve", [("pages/Insights.py", "Opportunities", "insights"), ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
+                     ("pages/Value.py", "Value & ROI", "finance_mode")]),
+        ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
+    tools = None
     with st.sidebar:
         logo = base64.b64encode((ROOT / "assets/neat-logo.svg").read_bytes()).decode()
         st.html(f'<div class="brand"><img src="data:image/svg+xml;base64,{logo}" alt="Neat"/><p>Workplace intelligence</p></div>')
-        presentation = st.toggle("Presentation view", **field_state("presentation_mode", True),
-                                 help="Four compact chapters for the webinar. Switch off for the full dashboard.")
-        groups = [
-            ("Understand", [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
-                            ("pages/Feedback.py", "Feedback", "sentiment_satisfied"), ("pages/Environment.py", "Environment", "thermostat")]),
-            ("Improve", [("pages/Insights.py", "Opportunities", "insights"), ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
-                         ("pages/Value.py", "Value & ROI", "finance_mode")]),
-            ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
         if presentation:
-            st.html('<div class="nav-group">FROM INSIGHT TO ACTION</div>')
+            st.html('<div class="nav-group">UNDERSTAND · LISTEN · IMPROVE</div>')
             for path, label, icon in [("app.py", "01 · Current state", "dashboard"),
                                       ("pages/Spaces.py", "02 · Room fit", "meeting_room"),
                                       ("pages/Feedback.py", "03 · Experience", "sentiment_satisfied"),
                                       ("pages/Environment.py", "04 · Improve", "bolt")]:
                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
-            with st.expander("Explore the full analysis"):
-                for _, links in groups:
-                    for path, label, icon in links:
-                        if path in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
-                            continue
-                        st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
-                st.caption("Switch Presentation view off for the detailed version of every chapter.")
-            with st.popover("Presenter guide", icon=":material/co_present:", width="stretch"):
-                st.markdown("**8 minutes of customer value + 2½ minutes of how we built it**")
-                st.write("**0:00–2:00 · Current state.** Explain the room map, separate usage and sample sentiment leaders, and the room-specific next step. Follow Arran where the selected evidence supports it.")
-                st.write("**2:00–4:00 · Room fit.** Show the automatic peer, then Layout options. Validate peak groups and unmet booking demand before changing capacity.")
-                st.write("**4:00–6:00 · Experience.** Contrast employees and guests. Submit one response on the open companion; explain that it stays in this browser session.")
-                st.write("**6:00–8:00 · Improve.** Run one AC simulation. At 7:15 open Pilot & outcomes. Close on the proposed owner, missing baseline, success measures and review decision.")
-                st.write("**8:00–10:30 · How we built it.** Customer questions → Pulse observations in a published Google Sheet → Python analysis and Streamlit / Plotly → ChatGPT-assisted iteration → GitHub and Streamlit hosting. Defined calculations drive the measures; there is no direct Pulse collector in this app.")
-                st.caption("Before presenting: use a fixed Custom dates range, enable Hold data for presentation under Data source, load all four pages, reset the form and simulation, then return to Current state. Keep a local backup recording.")
-                st.caption("Pulse supplies observations. Feedback is synthetic, financial values are assumptions and building controls are simulated. None measures whether a commute is worthwhile by itself.")
+            tools = st.expander("Presenter tools")
         else:
             for group, links in groups:
                 st.html(f'<div class="nav-group">{group}</div>')
                 for path, label, icon in links:
                     st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
-        with st.expander("Data source"):
-            st.caption("Published telemetry CSV · cached for 10 minutes")
-            st.toggle("Use demonstration data", **field_state("demo_mode", False))
-            st.toggle("Hold data for presentation", **field_state("hold_observations", False),
-                      help="Keep the loaded observations in this browser session across page changes. Filters still work. Refresh observations replaces the snapshot.")
-            st.caption("When held, new source readings are not loaded automatically. Turn off after presenting to resume normal refreshes.")
-            if st.button("Refresh observations", width="stretch"):
-                st.session_state.pop("held_observations", None)
-                fetch.clear()
-                analysis.clear()
-                st.rerun()
+        with tools if tools is not None else st.container():
+            st.toggle("Presentation view", **field_state("presentation_mode", True),
+                      help="Four focused pages for the webinar. Switch off for the full dashboard.")
+            if presentation:
+                with st.expander("Timing and talking points"):
+                    st.markdown("**8-minute walkthrough + 2½-minute build story**")
+                    st.write("**0–2 min · Current state.** Show the room map, the two leaders and the recommended first step. Follow one room.")
+                    st.write("**2–4 min · Room fit.** The current and smaller-room layouts are already visible. Check peak demand before changing capacity.")
+                    st.write("**4–6 min · Experience.** Show employee and guest ratings; submit one response on the open companion.")
+                    st.write("**6–8 min · Improve.** Explain the recommendation, run one example and close on the owner and success measure. No second tab is needed.")
+                    st.write("**8–10½ min · Build.** Customer questions → Pulse observations in Google Sheets → Python, Streamlit and Plotly → ChatGPT-assisted iteration → GitHub and Streamlit hosting.")
+                    st.caption("Use Custom dates and Hold data for presentation. Load all four pages before presenting. Feedback is synthetic; controls are simulated; financial values are assumptions.")
+                with st.expander("Detailed analysis"):
+                    for _, links in groups:
+                        for path, label, icon in links:
+                            if path not in ["app.py", "pages/Spaces.py", "pages/Feedback.py", "pages/Environment.py"]:
+                                st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
+            with st.expander("Data source"):
+                st.caption("Published telemetry CSV · cached for 10 minutes")
+                st.toggle("Use demonstration data", **field_state("demo_mode", False))
+                st.toggle("Hold data for presentation", **field_state("hold_observations", False),
+                          help="Keep loaded observations in this browser session. Filters still work; Refresh observations replaces the snapshot.")
+                st.caption("Turn the hold off after presenting to resume normal refreshes.")
+                if st.button("Refresh observations", width="stretch"):
+                    st.session_state.pop("held_observations", None)
+                    fetch.clear()
+                    analysis.clear()
+                    st.rerun()
     if briefing:
         st.html((ROOT / "assets/briefing.css").read_text())
     st.html(f'<div class="eyebrow">{escape(active.upper())} / {escape(PURPOSE.get(active, "").upper())}</div><h1 class="hero">{escape(title)}</h1><p class="subtitle">{escape(subtitle)}</p>')
+    return tools
 
 
 def explain(key, widget_key=None):
@@ -153,7 +156,7 @@ def analysis(_data, fetched, rooms, start, end, office, warm, bright, minimum):
     return samples, inv, stats, summary, issues, previous
 
 
-def context(show_evidence=True, compact=False, sidebar_details=False):
+def context(show_evidence=True, compact=False, sidebar_details=False, details_container=None):
     data, quality, fetched = load()
     available = set(data.Location.unique())
     locations = (sorted(available) if st.session_state.get("demo_mode", False)
@@ -198,7 +201,7 @@ def context(show_evidence=True, compact=False, sidebar_details=False):
     inv = a.inventory(scope[scope.Timestamp <= end])
     inv = inv[inv.Timestamp >= start]
     if sidebar_details:
-        with st.sidebar.expander("Data & thresholds"):
+        with (details_container if details_container is not None else st.sidebar).expander("Data & thresholds"):
             col1, col2, col3, col4 = [st.container() for _ in range(4)]
     else:
         col1, col2, col3, col4 = ([st.container() for _ in range(4)] if compact else

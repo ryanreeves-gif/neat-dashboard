@@ -53,11 +53,15 @@ def test_finance_stays_opt_in_and_separate_from_control_simulation():
     at = presentation().switch_page("pages/Environment.py").run()
     assert not at.exception
     assert at.toggle(key="_overview_example").value is False
-    at.button(key="brief_show_savings").click().run()
+    at.toggle(key="_overview_example").set_value(True).run()
     assert not at.exception
     assert at.toggle(key="_overview_example").value is True
     html = " ".join(e.proto.body for e in at.get("html"))
-    assert "£7,500" in html and "ILLUSTRATIVE" in html
+    assert "£7,500" not in html  # an illustration is not this room's forecast
+    at.switch_page("app.py").run()
+    html = " ".join(e.proto.body for e in at.get("html"))
+    assert "£7,500" in html and "Illustrative assumptions" in html
+    at.switch_page("pages/Environment.py").run()
     at.button(key="brief_run").click().run()
     assert not at.exception
     run = at.session_state["brief_workflow"]
@@ -68,7 +72,7 @@ def test_finance_stays_opt_in_and_separate_from_control_simulation():
     assert run["payload"]["measured_saving"] is None
     at.selectbox(key="_brief_condition").select("light").run()
     assert not at.exception
-    assert not any("Simulation replayed" in e.proto.body for e in at.get("html"))
+    assert "brief_workflow" not in at.session_state
 
 
 def test_low_coverage_cannot_authorise_a_presentation_control_demo():
@@ -86,7 +90,7 @@ def test_companion_is_ready_on_entry_and_test_submission_stays_separate():
     at = presentation().switch_page("pages/Feedback.py").run()
     assert any(b.label == "Share feedback" for b in at.button)
     assert not any(b.label == "Try the portrait survey" for b in at.button)
-    at.get("button_group")[0].set_value("Customer / guest").run()
+    at.selectbox(key="_feedback_audience").select("Customer / guest").run()
     assert not at.exception
     assert at.session_state["feedback_audience"] == "Customer / guest"
     sample_cards = next(e.proto.body for e in at.get("html") if 'brief-metrics stacked' in e.proto.body)
@@ -95,9 +99,9 @@ def test_companion_is_ready_on_entry_and_test_submission_stays_separate():
     assert any("rate both" in w.value for w in at.warning)
     assert "feedback_tryouts" not in at.session_state
     groups = at.get("button_group")
-    groups[1].set_value("Customer / guest")
-    groups[2].set_value(5)
-    groups[3].set_value(4)
+    groups[0].set_value("Customer / guest")
+    groups[1].set_value(5)
+    groups[2].set_value(4)
     next(b for b in at.button if b.label == "Share feedback").click().run()
     assert not at.exception, [e.message for e in at.exception]
     assert len(at.session_state["feedback_tryouts"]) == 1
@@ -106,7 +110,7 @@ def test_companion_is_ready_on_entry_and_test_submission_stays_separate():
     assert next(e.proto.body for e in at.get("html") if 'brief-metrics stacked' in e.proto.body) == sample_cards
     at.button(key="frame_next").click().run()
     assert not at.exception
-    assert all(g.value is None for g in at.get("button_group")[1:])
+    assert all(g.value is None for g in at.get("button_group"))
     assert len(at.session_state["feedback_tryouts"]) == 1
     options = at.selectbox(key="_selected_room").options
     at.selectbox(key="_selected_room").select(options[-1]).run()
@@ -114,31 +118,26 @@ def test_companion_is_ready_on_entry_and_test_submission_stays_separate():
     assert any(b.label == "Share feedback" for b in at.button)
 
 
-def test_visual_estate_routes_keep_room_context_and_layout_replay_is_interactive():
+def test_straight_story_keeps_room_context_and_layout_is_visible_on_entry():
     at = presentation()
     assert not at.exception
     assert at.get("plotly_chart")
     at.selectbox(key="_feedback_audience").select("Neat employee").run()
-    assert at.session_state["feedback_audience"] == "Neat employee"
-    at.get("button_group")[0].set_value("Improvement choices").run()
-    assert not at.exception, [e.message for e in at.exception]
-    room = at.selectbox(key="_brief_improve_room").value
-    assert at.button(key="brief_to_layout")
-    at.button(key="brief_to_layout").click().run()
+    room = at.session_state["selected_room"]
+    assert not at.main.get("button_group")
+    at.switch_page("pages/Spaces.py").run()
     assert not at.exception, [e.message for e in at.exception]
     assert at.selectbox(key="_selected_room").value == room
-    assert at.session_state["brief_space_view"] == "Layout options"
     assert len(at.get("image")) == 2
-    # AppTest follows switch_page for this run but needs the target file bound
-    # explicitly for subsequent widget reruns (the browser retains the page).
-    at.switch_page("pages/Spaces.py").run()
-    seats = at.number_input[0]
+    assert not at.main.get("button_group")
+    seats = next(n for n in at.number_input if n.label == "Proposed room seats")
     seats.set_value(1).run()
     assert not at.exception
     assert any("Smaller-room option · 1 seats" in e.proto.body for e in at.get("html"))
-    at.switch_page("app.py").run()
-    assert at.session_state["feedback_audience"] == "Neat employee"
-    assert at.selectbox(key="_brief_improve_room").value == room
-    at.button(key="brief_to_controls").click().run()
+    at.switch_page("pages/Environment.py").run()
     assert not at.exception, [e.message for e in at.exception]
     assert at.selectbox(key="_selected_room").value == room
+    assert at.session_state["feedback_audience"] == "Neat employee"
+    assert not at.main.get("button_group")
+    assert len(at.main.button) == 1
+    assert at.main.button[0].key == "brief_run"

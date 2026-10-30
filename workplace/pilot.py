@@ -11,10 +11,10 @@ def pilot_options(ctx, room):
     findings = x.improvement_summary(ctx)["issues"]
     kinds = set(findings.loc[findings["Room key"].eq(room), "Kind"])
     options = []
-    if "fit" in kinds:
-        options.append("Room layout")
     if kinds & {"warm", "light"}:
         options.append("Operating schedules")
+    if "fit" in kinds:
+        options.append("Room layout")
     return options or ["Evidence baseline"]
 
 
@@ -24,28 +24,28 @@ def pilot_plan(ctx, room, focus=None):
     row = ctx["stats"].set_index("Room key").loc[room]
     plans = {
         "Room layout": dict(
-            title="Validate a smaller-room pilot", owner="Workplace + IT / AV",
-            action="Trial a reversible layout after checking peak demand and room purpose.",
-            gate="Check bookings, unmet demand, peak groups, accessibility, acoustics and AV.",
-            measure="Track capacity exceptions, room use and genuine feedback.",
+            title="Test a smaller-room layout", owner="Workplace + IT / AV",
+            action="Trial a reversible layout that suits the groups using the room.",
+            gate="Confirm bookings, peak groups, room purpose and accessibility.",
+            measure="Compare room use, unmet demand and real feedback.",
             benefit="Better space allocation", cost="Design, furniture, AV and any building work",
             baseline="Observed attendance and capacity; bookings still needed",
             success="The room serves its intended groups; peak demand is accommodated elsewhere.",
         ),
         "Operating schedules": dict(
-            title="Validate an operating-schedule pilot", owner="Facilities + IT / BMS",
-            action="Check actual plant and lighting state; trial one permitted schedule change.",
-            gate="Confirm vacancy, bookings, daylight, room-to-zone mapping and comfort limits.",
-            measure="Track comfort, qualifying condition hours and metered energy.",
+            title="Check the room's running schedule", owner="Facilities + IT / BMS",
+            action="Trial one approved schedule change in this room.",
+            gate="Confirm when the room is empty and what is actually running.",
+            measure="Compare actual energy use and comfort before and after.",
             benefit="Potential operating efficiency", cost="Integration, commissioning and ongoing support",
             baseline="Observed conditions; controller state and energy baseline still needed",
             success="Actual energy or cost improves while comfort and room availability are protected.",
         ),
         "Evidence baseline": dict(
-            title="Build the evidence before changing the room", owner="Workplace + IT + Facilities",
-            action="Confirm reporting and room purpose, then collect a representative baseline.",
-            gate="No qualifying intervention is established for this room in the selected scope.",
-            measure="Track reporting coverage, bookings and genuine feedback.",
+            title="Collect more evidence first", owner="Workplace + IT + Facilities",
+            action="Collect a representative period of room use and feedback.",
+            gate="Confirm sensor reporting and what the room is meant to support.",
+            measure="Review coverage, booking demand and real feedback.",
             benefit="A more reliable investment decision", cost="Data collection and measurement effort",
             baseline="Validate observations and collect the missing demand and experience data",
             success="Enough representative evidence exists to choose and cost a specific intervention.",
