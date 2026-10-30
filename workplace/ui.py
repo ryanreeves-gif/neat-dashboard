@@ -50,7 +50,7 @@ def shell(active, title, subtitle, briefing=False):
                                       ("pages/Spaces.py", "02 · Room fit", "meeting_room"),
                                       ("pages/Feedback.py", "03 · Experience", "sentiment_satisfied"),
                                       ("pages/Environment.py", "04 · Improve", "bolt"),
-                                      ("pages/Next_Steps.py", "05 · Office opportunity", "flag")]:
+                                      ("pages/Next_Steps.py", "05 · Office value", "flag")]:
                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
             tools = st.expander("Presenter tools")
         else:

@@ -109,7 +109,7 @@ def render(ctx, case=None):
                 + mix_html(model) + f'<div class="office-split-summary">{concepts}</div>'
                 '<p class="office-fit-note">Groups stay in their original room or its larger replacement. New bookings and simultaneous demand are not predicted.</p></section></div>')
         investment = f' · {money(costs["project_cost"], "GBP")} one-off investment' if costs else ''
-        st.html(f'<section class="office-programme"><div><strong>One office programme · {len(model["controls"])} controls reviews + {count} concept splits</strong>'
+        st.html(f'<section class="office-programme"><div><strong>One office programme · {len(model["controls"])} controls reviews + {count} concept split{"s" if count != 1 else ""}</strong>'
                 f'<span>Workplace + Facilities + IT · Confirm dimensions, bookings and budget; then pilot and remeasure.</span></div>'
                 f'<div><b>{"Illustrative costs" if costs and costs["illustrative"] else "Entered cost assumptions" if costs else "Costing required"}{escape(investment)}</b>'
                 '<small>Potential avoided expansion is a separate benefit; no rent saving is claimed.</small></div></section>')
