@@ -56,6 +56,7 @@ div[class*="st-key-brief_panel_"]{background:white;border:1px solid #E2E7E9;bord
 .st-key-brief_experience_workspace .brief-source{font-size:8px;letter-spacing:0}
 .st-key-brief_experience_workspace .st-key-brief_panel_sentiment{padding:13px 12px}
 .st-key-brief_experience_workspace .brief-audience{margin:5px 0 10px}
+.st-key-brief_experience_workspace .st-key-brief_panel_sentiment .brief-audience{margin:3px 0 8px}
 .st-key-brief_experience_workspace .brief-audience>div:first-child{font-size:12px;margin-bottom:5px}
 .st-key-brief_experience_workspace .brief-audience small,.st-key-brief_experience_workspace .brief-small{font-size:10px}
 .st-key-brief_experience_workspace .brief-insight{padding:10px 11px;font-size:10px}
@@ -63,6 +64,7 @@ div[class*="st-key-brief_panel_"]{background:white;border:1px solid #E2E7E9;bord
 .st-key-brief_experience_workspace .st-key-brief_companion .st-key-frame_screen{padding:14px 13px 12px;border-width:7px;border-radius:25px}
 .st-key-brief_experience_workspace .st-key-brief_companion .frame-title{font-size:23px!important}
 .st-key-brief_experience_workspace .st-key-brief_companion .frame-brand img{width:60px;height:28px}
+.st-key-brief_experience_workspace .st-key-brief_companion [data-testid="stVerticalBlock"]{gap:.25rem!important}
 .st-key-brief_experience_workspace .st-key-brief_companion [data-testid="stButtonGroup"] button{font-size:13px;min-width:32px}
 .st-key-brief_experience_workspace .st-key-brief_companion [class*="st-key-frame_audience_"] button{font-size:10px}
 </style>
