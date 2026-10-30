@@ -114,9 +114,14 @@ def picture():
 
 
 @st.cache_resource
+def _registered_widget(js, css):
+    return components.component("neat_office_map", css=css, js=js)
+
+
 def widget():
-    return components.component("neat_office_map", css=(ROOT / "assets/office-map.css").read_text(),
-                                js=(ROOT / "assets/office-map.js").read_text())
+    # Changes to a front-end asset must invalidate the registered component.
+    return _registered_widget((ROOT / "assets/office-map.js").read_text(),
+                              (ROOT / "assets/office-map.css").read_text())
 
 
 def render(ctx, portfolio):

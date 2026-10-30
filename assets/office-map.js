@@ -8,7 +8,10 @@ export default function(component) {
   root.querySelector('img').src = data.image;
   const pins = root.querySelector('.map-pins');
   const labels = root.querySelector('.map-labels');
-  let lens = parentElement.dataset.officeLens || 'usage';
+  // Streamlit supplies a ShadowRoot when style isolation is enabled. Store
+  // view state on its host element; a ShadowRoot itself has no dataset.
+  const stateHost = parentElement.host || parentElement;
+  let lens = stateHost.dataset.officeLens || 'usage';
   let selected = data.selected;
   const products = row => row.products.map(p => p.name.replace(/^Neat /, '') + (p.count > 1 ? ' ×' + p.count : '')).join(' · ') || 'Products not reported';
   function value(row) {
@@ -63,7 +66,7 @@ export default function(component) {
     root.querySelector('.map-legend').textContent = lens === 'usage' ? 'Time in use · — means no qualifying room-use evidence' : lens === 'temperature' ? 'Mean °C · recorded conditions, not a comfort pass/fail · — means no single reading' : 'Invented space ratings / 5 · at least 5 responses · — means no qualifying sample';
   }
   root.querySelectorAll('[data-lens]').forEach(b => b.onclick = () => {
-    lens = b.dataset.lens; parentElement.dataset.officeLens = lens; draw();
+    lens = b.dataset.lens; stateHost.dataset.officeLens = lens; draw();
   });
   draw();
   return () => root.remove();
