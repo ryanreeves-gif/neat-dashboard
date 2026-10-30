@@ -158,3 +158,22 @@ def test_london_map_renders_with_scoped_source_and_keeps_other_chapters(monkeypa
     payload = json.loads(at.get("bidi_component")[0].proto.json)
     assert sum(r["responses"] for r in payload["rows"]) < total
     assert payload["selected"] == "A"
+
+    at.selectbox(key="_preset").select("Custom dates").run()
+    day = pd.Timestamp("2026-10-26").date()
+    at.date_input(key="_custom_dates").set_value((day, day)).run()
+    at.switch_page("pages/Environment.py").run()
+    assert not at.exception, [e.message for e in at.exception]
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert payload["view"] == "improve" and payload["selected"] == "A"
+    assert all(r["action"] == "layout" for r in payload["rows"] if r["allowed"])
+    assert len(at.get("image")) == 2 and not at.main.button
+    at.selectbox(key="_selected_room").select("London EC / Arran").run()
+    assert not at.exception, [e.message for e in at.exception]
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert payload["selected"] == "G"
+    assert any("Current room · 12 seats" in e.proto.body for e in at.get("html"))
+    at.multiselect(key="_room_filter").set_value(["London EC / Arran"]).run()
+    assert not at.exception
+    payload = json.loads(at.get("bidi_component")[0].proto.json)
+    assert {r["id"] for r in payload["rows"] if r["allowed"]} == {"G"}

@@ -67,4 +67,17 @@ div[class*="st-key-brief_panel_"]{background:white;border:1px solid #E2E7E9;bord
 .st-key-brief_experience_workspace .st-key-brief_companion [data-testid="stVerticalBlock"]{gap:.25rem!important}
 .st-key-brief_experience_workspace .st-key-brief_companion [data-testid="stButtonGroup"] button{font-size:13px;min-width:32px}
 .st-key-brief_experience_workspace .st-key-brief_companion [class*="st-key-frame_audience_"] button{font-size:10px}
+.st-key-brief_improve_workspace .brief-heading{font-size:16px;margin-bottom:5px}
+.st-key-brief_improve_workspace div[class*="st-key-brief_panel_"]{padding:13px 14px}
+.st-key-brief_panel_improve_map .brief-small{font-size:10px}
+.st-key-brief_panel_improve_action [data-testid="stVerticalBlock"]{gap:.4rem}
+.st-key-brief_control_settings [data-testid="stWidgetLabel"] p{font-size:11px}
+.improve-recommendation{border-left:3px solid #638C7D;background:#EAF0ED;border-radius:9px;padding:10px 13px}
+.improve-recommendation.layout{border-color:#5F259F;background:#F2EEF6}.improve-recommendation.evidence{border-color:#DBC684;background:#F7F2E4}
+.improve-recommendation h2{font-size:22px;line-height:1.15;letter-spacing:-.3px;padding:0;margin:5px 0 7px}
+.improve-evidence{font-size:13px;font-weight:700;line-height:1.35}.improve-recommendation p{font-size:11px;line-height:1.35;color:#4C515C;margin:6px 0 0}
+.improve-value{display:grid;grid-template-columns:1.05fr .85fr 1.35fr;gap:16px;background:white;border:1px solid #E2E7E9;border-radius:12px;padding:12px 16px}
+.improve-value span{display:block;color:#5F259F;font-size:10px;font-weight:700;margin-bottom:5px}.improve-value b{display:block;font-size:13px;line-height:1.3}.improve-value small{display:block;font-size:10px;line-height:1.35;color:#4C515C;margin-top:5px}
+.st-key-brief_improve_workspace .brief-layout-score{gap:9px}.st-key-brief_improve_workspace .brief-layout-score span{font-size:11px}.st-key-brief_improve_workspace .brief-insight{padding:9px 12px}
+@media(max-width:700px){.improve-value{grid-template-columns:1fr}.improve-recommendation h2{font-size:20px}}
 </style>

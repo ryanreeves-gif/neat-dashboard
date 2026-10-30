@@ -44,7 +44,7 @@ def preview_state(settings, minute):
             "fan": settings["boost"] if active and settings["kind"] == "purge" else settings["baseline_fan"]}
 
 
-def animation_html(settings, room_name, run_id=None):
+def animation_html(settings, room_name, run_id=None, compact=False):
     payload = {**settings, "room_name": str(room_name), "running": bool(run_id), "run_id": run_id,
                "frames": [preview_state(settings, settings["duration"] * i / 120) for i in range(121)]}
     # Configuration is data, never executable markup, even for unusual room names.
@@ -52,4 +52,5 @@ def animation_html(settings, room_name, run_id=None):
     font = b64encode((ROOT / "assets/MaisonNeue-Book.woff2").read_bytes()).decode()
     bold = b64encode((ROOT / "assets/MaisonNeue-Bold.woff2").read_bytes()).decode()
     return ((ROOT / "assets/control-demo.html").read_text().replace("__CONFIG__", encoded)
-            .replace("__FONT__", font).replace("__BOLD_FONT__", bold))
+            .replace("__FONT__", font).replace("__BOLD_FONT__", bold)
+            .replace("__COMPACT__", "compact" if compact else ""))

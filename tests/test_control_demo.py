@@ -45,7 +45,9 @@ def test_iframe_configuration_is_safe_data_and_only_runs_when_requested():
     assert parsed['running'] is False and len(parsed['frames']) == 121
     assert '</script>' not in raw
     assert parsed['room_name'] == '</script><script>alert(1)</script>'
-    assert '__CONFIG__' not in markup and '__FONT__' not in markup and '__BOLD_FONT__' not in markup
+    assert all(token not in markup for token in ['__CONFIG__', '__FONT__', '__BOLD_FONT__', '__COMPACT__'])
+    compact = animation_html(scenario('purge', 15), 'Arran', compact=True)
+    assert 'class="paused compact"' in compact and 'demo-playback' in compact
 
 
 def test_all_three_controls_capture_settings_invalidate_changes_and_reset():

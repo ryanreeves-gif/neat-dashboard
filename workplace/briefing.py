@@ -326,25 +326,60 @@ def simulation_config(ctx, room, kind, signal):
             "gateway_acknowledgement": None, "measured_saving": None}
 
 
-def action(ctx, case):
+def improve_recommendation(ctx, room, plan):
+    row = ctx["stats"].set_index("Room key").loc[room]
+    focus = plan["focus"]
+    if focus == "Operating schedules":
+        signals = []
+        for kind, label in [("warm", "warm"), ("light", "bright")]:
+            signal = action_signal(ctx, room, kind)
+            if signal:
+                signals.append(f'{signal["Evidence hours"]:.1f} h {label} while recorded empty')
+        evidence = " · ".join(signals)
+        note = "Validate actual controls, then trial one approved schedule change. Temperature and lux alone do not establish wasted energy."
+    elif focus == "Room layout":
+        evidence = f'90% of occupied time had {u.fmt(row["P90 attendance"])} people or fewer · {u.fmt(row.Capacity)} seats'
+        note = plan["gate"]
+    else:
+        evidence = f'{u.fmt(row["Coverage %"], "%")} occupancy coverage · {u.fmt(row["Observed hours"], " h", 1)} observed'
+        note = "No qualifying intervention is established in this scope. Check reporting and representative demand."
+    tone = {"Operating schedules": "controls", "Room layout": "layout", "Evidence baseline": "evidence"}[focus]
+    html(f'<article class="improve-recommendation {tone}"><div class="brief-label">RECOMMENDED FIRST STEP · {escape(plan["name"])}</div>'
+         f'<h2>{escape(plan["title"])}</h2><div class="improve-evidence">{escape(evidence)}</div>'
+         f'<p>{escape(note)}</p></article>')
+
+
+def improve_controls(ctx, room):
     from workplace.control_demo import KINDS, scenario, animation_html
     import streamlit.components.v1 as components
 
-    room = room_picker(ctx)
-    plan = pilot_plan(ctx, room)
-    options = pilot_options(ctx, room)
-    with ctx["tools"].expander("Simulation settings"):
-        kind = st.selectbox("Control to simulate", list(KINDS), format_func=KINDS.get,
-                            **u.field_state("brief_condition", "warm"))
-        temperature = st.slider("AC setpoint (°C)", 16.0, 28.0, step=.5, **u.field_state("brief_ac_target", 21.0))
-        brightness = st.slider("Lighting output (%)", 0, 100, step=10, **u.field_state("brief_light_target", 20))
-        boost = st.slider("Ventilation boost (%)", 20, 100, step=10, **u.field_state("brief_air_boost", 80))
-        duration = st.slider("Override duration (minutes)", 5, 60, step=5, **u.field_state("brief_control_minutes", 15))
+    if st.session_state.get("brief_control_room") != room:
+        st.session_state["brief_control_room"] = room
+        st.session_state["brief_condition"] = "warm" if action_signal(ctx, room, "warm") else "light"
+    with st.container(key="brief_control_settings"):
+        control, target, time = st.columns([1.2, 1.15, 1], gap="small")
+        with control:
+            kind = st.selectbox("Control to simulate", list(KINDS), format_func=KINDS.get,
+                                **u.field_state("brief_condition", "warm"))
+        temperature = st.session_state.get("brief_ac_target", 21.0)
+        brightness = st.session_state.get("brief_light_target", 20)
+        boost = st.session_state.get("brief_air_boost", 80)
+        with target:
+            if kind == "warm":
+                temperature = st.slider("AC setpoint (°C)", 16.0, 28.0, step=.5, **u.field_state("brief_ac_target", temperature))
+            elif kind == "light":
+                brightness = st.slider("Lighting output (%)", 0, 100, step=10, **u.field_state("brief_light_target", brightness))
+            else:
+                boost = st.slider("Ventilation boost (%)", 20, 100, step=10, **u.field_state("brief_air_boost", boost))
+        with time:
+            duration = st.slider("Duration (minutes)", 5, 60, step=5, **u.field_state("brief_control_minutes", 15))
+    with ctx["tools"].expander("Simulation assumptions"):
         start_temperature = st.number_input("Starting room temperature (demo °C)", min_value=10.0, max_value=40.0, step=.5,
                                             **u.field_state("brief_start_temperature", 26.0))
         st.caption("Starting controls and response curves are invented. Lux does not prove lights are on; the air indicator is not measured CO₂ or a health score.")
     signal = action_signal(ctx, room, kind)
-    row = ctx["inventory"].set_index("Room key").loc[room]
+    if signal is None:
+        html('<div class="brief-small">This control is an exploratory example; the selected observations do not establish a need for it.</div>')
     settings = scenario(kind, duration, temperature, brightness, boost, start_temperature)
     config = {**simulation_config(ctx, room, kind, signal), "settings": settings}
     signature = json.dumps(config, sort_keys=True)
@@ -352,34 +387,77 @@ def action(ctx, case):
     if result and result["signature"] != signature:
         st.session_state.pop("brief_workflow", None)
         result = None
-    left, right = st.columns([1, 1.5], gap="medium")
-    with left, st.container(key="brief_panel_recommendation"):
-        html(f'<div class="brief-label">RECOMMENDED FIRST STEP · {escape(plan["name"])}</div>'
-             f'<h2 class="brief-direct-answer">{escape(plan["title"])}</h2>')
-        findings = x.improvement_summary(ctx)["issues"]
-        findings = findings[findings["Room key"].eq(room)]
-        if plan["focus"] == "Operating schedules":
-            warm = findings[findings.Kind.eq("warm")]
-            light = findings[findings.Kind.eq("light")]
-            observed = warm.iloc[0] if not warm.empty else light.iloc[0]
-            condition = "warm" if observed.Kind == "warm" else "bright"
-            html(f'<div class="brief-why"><strong>{observed["Evidence hours"]:.1f} h</strong><span>{condition} while recorded empty</span></div>')
-            st.caption("A reason to check actual controls and schedules; not proof of wasted energy.")
-        else:
-            html(f'<div class="brief-small">{escape(plan["action"])}</div>')
-        steps([( "Check", plan["gate"]), ("Try", plan["action"]), ("Measure", plan["measure"])])
-        html(f'<div class="brief-owner"><b>Owner</b><span>{escape(plan["owner"])}</span></div>')
-        if "Room layout" in options and plan["focus"] != "Room layout":
-            html('<div class="brief-small"><b>Then consider the layout.</b> Validate bookings and peak demand before spending on a smaller-room design.</div>')
-        html('<div class="brief-small"><b>Value to prove:</b> better use and experience, with any cost saving measured against the baseline.</div>')
-    with right, st.container(key="brief_panel_control_preview"):
-        heading("See how a response could work", "Illustrative example · no commands are sent")
-        target = f"{temperature:g}°C" if kind == "warm" else f"{brightness}% output" if kind == "light" else f"{boost}% boost"
-        if st.button(f"Run example · {KINDS[kind]} · {target} · {duration} min", key="brief_run", type="primary", width="stretch"):
-            result = {"signature": signature, "payload": {**config, "created_at": datetime.now(timezone.utc).isoformat(),
-                      "stages": ["Demo request", "Simulated review", "Simulated override", "Assumed schedule restored"]}}
-            st.session_state["brief_workflow"] = result
-        components.html(animation_html(settings, row["Room Name"], result["payload"]["created_at"] if result else None), height=505, scrolling=False)
+    target_label = f"{temperature:g}°C" if kind == "warm" else f"{brightness}% output" if kind == "light" else f"{boost}% boost"
+    if st.button(f"Run simulation · {KINDS[kind]} · {target_label} · {duration} min", key="brief_run", type="primary", width="stretch"):
+        result = {"signature": signature, "payload": {**config, "created_at": datetime.now(timezone.utc).isoformat(),
+                  "stages": ["Demo request", "Simulated review", "Simulated override", "Assumed schedule restored"]}}
+        st.session_state["brief_workflow"] = result
+    name = ctx["inventory"].set_index("Room key").loc[room, "Room Name"]
+    components.html(animation_html(settings, name, result["payload"]["created_at"] if result else None,
+                                   compact=True), height=285, scrolling=True)
+    return result
+
+
+def improve_layout(ctx, room):
+    row = ctx["stats"].set_index("Room key").loc[room]
+    evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
+    capacity = int(row.Capacity) if pd.notna(row.Capacity) and row.Capacity > 0 and int(row.Capacity) == row.Capacity else None
+    default = min(100, max(1, int(capacity / 2))) if capacity else 4
+    key = "brief_seats_" + sha256(room.encode()).hexdigest()[:12]
+    setting, explanation = st.columns([1, 2], vertical_alignment="center")
+    with setting:
+        seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(key, default))
+    with explanation:
+        html('<div class="brief-small">Try a reversible layout first. This replays observed groups; it does not predict future demand or savings.</div>')
+    layout_options(row, evidence, capacity, seats, evaluate_layout(evidence, [seats]), True)
+
+
+def improve_value(plan, case, room):
+    matched = scoped_case(case, room)
+    financial = (f'{money(matched["annual_net"], matched["currency"])} annual net · entered assumptions, not measured'
+                 if matched else "Financial value to quantify · no measured saving")
+    html('<div class="improve-value">'
+         f'<div><span>Potential benefit</span><b>{escape(plan["benefit"])}</b><small>{escape(financial)}</small></div>'
+         f'<div><span>Owner</span><b>{escape(plan["owner"])}</b><small>Agree a baseline, budget and review date.</small></div>'
+         f'<div><span>Success measure</span><b>{escape(plan["measure"])}</b><small>Measure before and after the pilot.</small></div></div>')
+
+
+def action(ctx, case):
+    from workplace import office_map
+    with st.container(key="brief_improve_workspace"):
+        left, right = st.columns([1, 2.1], gap="medium")
+        with left, st.container(key="brief_panel_improve_map"):
+            room = room_picker(ctx)
+            if office_map.applies(ctx):
+                office_map.render_improve(ctx, room)
+            else:
+                heading("Choose where to start")
+                html('<div class="brief-small">Follow the selected room from observations to a practical next step. The office map is available for London EC.</div>')
+        options = pilot_options(ctx, room)
+        route_key = "brief_route_" + sha256(room.encode()).hexdigest()[:12]
+        if st.session_state.get(route_key) not in options:
+            st.session_state[route_key] = options[0]
+        with right, st.container(key="brief_panel_improve_action"):
+            focus = options[0]
+            if len(options) > 1:
+                labels = {"Operating schedules": "Controls review", "Room layout": "Room layout"}
+                focus = st.segmented_control("Review route", options, format_func=labels.get,
+                                             selection_mode="single", required=True,
+                                             **u.field_state(route_key, options[0]))
+            plan = pilot_plan(ctx, room, focus)
+            improve_recommendation(ctx, room, plan)
+            result = None
+            if plan["focus"] == "Operating schedules":
+                result = improve_controls(ctx, room)
+            else:
+                st.session_state.pop("brief_workflow", None)
+                if plan["focus"] == "Room layout":
+                    improve_layout(ctx, room)
+                else:
+                    steps([("Check reporting", "Validate sensor coverage and the room's intended purpose."),
+                           ("Understand demand", "Collect a representative period of occupancy and bookings, including peak groups."),
+                           ("Listen to users", "Capture real employee and guest feedback. Sample sentiment cannot validate a room change.")])
+        improve_value(plan, case, room)
     with ctx["tools"].expander("Pilot details and business case"):
         st.write(plan["success"])
         st.caption("Agree targets, budget and review date. Collect real feedback, bookings and actual energy/cost before and after. No measured pilot outcome is connected here.")
@@ -393,7 +471,6 @@ def action(ctx, case):
         if st.button("Reset simulation", key="brief_reset", disabled=result is None):
             st.session_state.pop("brief_workflow", None)
             st.rerun()
-    html('<div class="brief-closing"><b>Start with one room. Make one change. Measure the difference.</b><span>Agree the owner, baseline and review date before starting.</span></div>')
 
 
 def run(active):

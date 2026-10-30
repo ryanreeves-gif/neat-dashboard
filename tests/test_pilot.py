@@ -69,13 +69,13 @@ def test_customer_pilot_keeps_scope_and_does_not_fabricate_after_results():
     at.switch_page("pages/Environment.py").run()
     assert not at.exception, [e.message for e in at.exception]
     html = " ".join(e.proto.body for e in at.get("html"))
-    for phrase in ["RECOMMENDED FIRST STEP", "Check", "Try", "Measure", "Owner", "Held snapshot"]:
+    for phrase in ["RECOMMENDED FIRST STEP", "Check", "Potential benefit", "Success measure", "Owner", "Held snapshot"]:
         assert phrase in html
     assert any("No measured pilot outcome" in caption.value for caption in at.caption)
     assert any("Financial return is still to quantify for this room" in item.value for item in at.markdown)
     assert len(at.main.button) == 1
     assert at.main.button[0].key == "brief_run"
-    assert not at.main.get("button_group")
+    assert len(at.main.get("button_group")) <= 1
     room = at.selectbox(key="_selected_room").value
     at.multiselect(key="_room_filter").set_value([room]).run()
     assert not at.exception
@@ -84,3 +84,40 @@ def test_customer_pilot_keeps_scope_and_does_not_fabricate_after_results():
     assert not at.exception
     assert at.selectbox(key="_selected_room").value == room
     assert at.toggle(key="_hold_observations").value is True
+
+
+def test_improve_only_offers_the_response_supported_by_room_evidence(monkeypatch):
+    # Navigation is covered by the full-app checks; this harness has no pages.
+    monkeypatch.setattr("streamlit.page_link", lambda *args, **kwargs: None)
+    def display():
+        import streamlit as st
+        from workplace.briefing import action
+        from test_executive import context_fixture
+        ctx = context_fixture()
+        # No real office map for this isolated route/coverage check.
+        ctx["demo"] = True
+        ctx["tools"] = st.sidebar
+        ctx["thresholds"] = {"warm": 22, "bright": 50, "minimum": 1}
+        if st.toggle("Limited coverage", key="limited"):
+            ctx["stats"]["Coverage %"] = 60
+        action(ctx, None)
+
+    at = AppTest.from_function(display).run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert at.selectbox(key="_selected_room").value == "London EC / Arran"
+    assert len(at.get("image")) == 2 and not at.main.button
+    assert not at.main.get("button_group") and not at.get("iframe")
+    at.selectbox(key="_selected_room").select("London EC / Barra").run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert at.button(key="brief_run") and not at.get("image")
+    assert not at.main.get("button_group")
+    at.button(key="brief_run").click().run()
+    assert "brief_workflow" in at.session_state
+    at.toggle(key="limited").set_value(True).run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert not at.main.button and not at.get("image") and not at.get("iframe")
+    assert "brief_workflow" not in at.session_state
+    rendered = " ".join(e.proto.body for e in at.get("html"))
+    assert "Collect more evidence first" in rendered
+    assert "60% occupancy coverage" in rendered
+    assert "Listen to users" in rendered

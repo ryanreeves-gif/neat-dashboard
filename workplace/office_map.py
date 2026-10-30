@@ -176,6 +176,35 @@ def render_experience(ctx, records, room, audience):
     html(f'<div class="brief-small">{escape(audience)} · dates and room filters apply. Use the room menu for spaces not positioned on the map.</div>')
 
 
+def improve_rows(ctx):
+    rows = fit_rows(ctx)
+    for row in rows:
+        focus = row["plan"]["focus"] if row["plan"] else None
+        row["action"] = {"Operating schedules": "controls", "Room layout": "layout",
+                         "Evidence baseline": "evidence"}.get(focus)
+        row["action_label"] = ("Controls + layout" if row["action"] == "controls" and row["route"] == "Controls + layout"
+                               else {"controls": "Controls review", "layout": "Layout review", "evidence": "More evidence"}.get(row["action"], "Outside room scope"))
+    return rows
+
+
+def render_improve(ctx, room):
+    from html import escape
+    from workplace.briefing import heading, html
+    rows = improve_rows(ctx)
+    selected = next((r["id"] for r in rows if r["key"] == room and r["allowed"]), None)
+    heading("Where should we act?", "Select a room to see its next step.")
+
+    def picked():
+        event = st.session_state.get("office_improve_map_component", {})
+        choose_space(rows, event.get("picked"), st.session_state)
+
+    widget()(data={"image": picture(), "rows": rows, "selected": selected, "view": "improve"},
+             key="office_improve_map_component", on_picked_change=picked)
+    if selected is None:
+        html(f'<div class="brief-small"><b>{escape(room.split(" / ", 1)[-1])}</b> has no confirmed map position. Its recommendation is shown alongside.</div>')
+    html('<div class="brief-small">Suggested reviews from the selected observations. Use the room menu for other spaces.</div>')
+
+
 def render(ctx, portfolio):
     """One compact spatial panel; chart comparison remains in presenter tools."""
     from workplace.briefing import html, heading, preferred_room

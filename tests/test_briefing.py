@@ -138,6 +138,17 @@ def test_straight_story_keeps_room_context_and_layout_is_visible_on_entry():
     assert not at.exception, [e.message for e in at.exception]
     assert at.selectbox(key="_selected_room").value == room
     assert at.session_state["feedback_audience"] == "Neat employee"
-    assert not at.main.get("button_group")
+    assert len(at.main.get("button_group")) == 1
+    assert at.main.get("button_group")[0].options == ["Controls review", "Room layout"]
     assert len(at.main.button) == 1
     assert at.main.button[0].key == "brief_run"
+    at.button(key="brief_run").click().run()
+    at.main.get("button_group")[0].set_value("Room layout").run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert "brief_workflow" not in at.session_state
+    assert not at.main.button and not at.get("iframe")
+    assert len(at.get("image")) == 2
+    assert any("Smaller-room option · 1 seats" in e.proto.body for e in at.get("html"))
+    at.main.get("button_group")[0].set_value("Operating schedules").run()
+    assert not at.exception and at.button(key="brief_run")
+    assert "brief_workflow" not in at.session_state

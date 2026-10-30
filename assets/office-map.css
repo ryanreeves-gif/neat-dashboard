@@ -35,3 +35,8 @@
 .office-map-experience .map-label{grid-template-columns:17px minmax(0,1fr);gap:5px;padding:5px}
 .office-map-experience .map-label b{font-size:11px}.office-map-experience .map-label small{font-size:10px}.office-map-experience .map-letter{width:17px;height:17px;font-size:10px}
 @container(max-width:310px){.office-map-fit .map-labels{grid-template-columns:1fr}}
+.office-map-improve .map-picture{max-width:245px}
+.office-map-improve .map-pin{width:44px;min-height:26px;padding:1px;line-height:1.05}
+.office-map-improve .map-pin span,.office-map-improve .map-pin strong{font-size:9px}
+.office-map-improve .map-pin[aria-pressed=true]{outline-width:2px;outline-offset:-2px}
+.map-pin[data-tone=controls]{background:#E2EFE8;color:#244D3D}.map-pin[data-tone=layout]{background:#EDE4F5;color:#5F259F}.map-pin[data-tone=evidence]{background:#F7F2E4;color:#775C26}
