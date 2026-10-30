@@ -115,7 +115,9 @@ def picture():
 
 @st.cache_resource
 def _registered_widget(js, css):
-    return components.component("neat_office_map", css=css, js=js)
+    # A content-specific name also invalidates Streamlit's browser-side module.
+    version = sha256((js + "\n" + css).encode()).hexdigest()[:12]
+    return components.component(f"neat_office_map_{version}", css=css, js=js)
 
 
 def widget():
