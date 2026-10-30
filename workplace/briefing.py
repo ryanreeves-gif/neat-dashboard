@@ -215,7 +215,7 @@ def space_comparison(ctx, room):
         html(f'<div class="brief-small"><b>Similar-size room:</b> {escape(comparison)}. Capacity match only; purpose and location can differ.</div>')
 
 
-def layout_options(row, evidence, capacity, seats, layout, qualifies):
+def layout_options(row, evidence, capacity, seats, layout, qualifies, compact=False):
     if not capacity:
         st.info("Confirm a positive whole-number room capacity before comparing layouts.")
         return
@@ -228,7 +228,7 @@ def layout_options(row, evidence, capacity, seats, layout, qualifies):
             heading(f"{label} · {count} seats")
             if evidence["typical"] is not None:
                 svg = v.room_capacity_svg(evidence["typical"], count).replace(v.BLUE, "#5F259F").replace("Blue represents", "Purple represents")
-                st.image(svg, width=310)
+                st.image(svg, width=240 if compact else 310)
             fit = result["fit_percent"]
             html(f'<div class="brief-layout-score"><strong>{u.fmt(fit, "%", 1)}</strong><span>of observed occupied time fits</span></div>'
                  f'<div class="brief-track"><i class="lead" style="width:{fit or 0:.2f}%"></i></div>'
@@ -237,8 +237,11 @@ def layout_options(row, evidence, capacity, seats, layout, qualifies):
         st.warning("Limited occupancy coverage: this replay is exploratory. Restore reporting before recommending a layout change.")
     next_step = ("Next step: check bookings and peak groups before a layout trial." if qualifies
                  else "Next step: establish representative demand before recommending a change.")
-    html(f'<div class="brief-insight"><b>{next_step}</b>'
-         f'Observed peak: {u.fmt(evidence["peak"])} people. Workplace + IT should confirm room purpose, accessibility and AV.</div>')
+    if compact:
+        html(f'<div class="brief-small"><b>Observed peak: {u.fmt(evidence["peak"])} people.</b> Confirm how larger groups will be accommodated before changing the room.</div>')
+    else:
+        html(f'<div class="brief-insight"><b>{next_step}</b>'
+             f'Observed peak: {u.fmt(evidence["peak"])} people. Workplace + IT should confirm room purpose, accessibility and AV.</div>')
 
 
 def experience(ctx, case):
@@ -409,7 +412,7 @@ def improve_layout(ctx, room):
         seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(key, default))
     with explanation:
         html('<div class="brief-small">Try a reversible layout first. This replays observed groups; it does not predict future demand or savings.</div>')
-    layout_options(row, evidence, capacity, seats, evaluate_layout(evidence, [seats]), True)
+    layout_options(row, evidence, capacity, seats, evaluate_layout(evidence, [seats]), True, compact=True)
 
 
 def improve_value(plan, case, room):
