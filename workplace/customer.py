@@ -7,7 +7,7 @@ from workplace import ui as u
 
 PURPOSE = {
     "Overview": "Your executive overview",
-    "Next steps": "Your executive conclusion",
+    "Office opportunity": "Your executive conclusion",
     "Spaces": "Match your rooms to real demand",
     "Feedback": "Understand the people using your spaces",
     "Environment": "Improve comfort and investigate running costs",

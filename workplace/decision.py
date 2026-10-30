@@ -1,107 +1,128 @@
-"""A readable closing screen; evidence, proposed action and value stay distinct."""
+"""One-screen office opportunity, with scenario inputs in presenter tools."""
 from hashlib import sha256
 from html import escape
-
-import pandas as pd
 import streamlit as st
-
-from workplace import analytics as a, customer as c, portfolio as p, ui as u
-from workplace.feedback import AUDIENCES, feedback_summary
-from workplace.pilot import pilot_plan, scoped_case
-from workplace.scenarios import room_evidence, evaluate_layout
+from workplace import ui as u, office_map
+from workplace.office_opportunity import opportunities, office_scenario
 from workplace.overview_view import money
 
 
-def closing_evidence(ctx, records, room, state, case=None):
-    """Reuse the same eligibility, scope and per-room proposal as the other pages."""
-    portfolio = p.room_portfolio(ctx, records)
-    winners = p.room_leaders(portfolio, "usage")
-    demand = dict(value="—", title="More usage evidence needed",
-                  detail="Confirm reporting before identifying a leading room.")
-    if not winners.empty:
-        names = " / ".join(winners["Room Name"]) if len(winners) <= 2 else f"{len(winners)} rooms tied"
-        demand = dict(value=u.fmt(winners.iloc[0]["Utilisation %"], "%", 1),
-                      title=f'{names} · {"joint most used" if len(winners) > 1 else "most used"}',
-                      detail="Time in use during valid observations. Protect availability where demand is strongest.")
-    audience = state.get("feedback_audience", "Everyone")
-    cohorts = []
-    for group, name in zip(AUDIENCES, ["Employees", "Customers / guests"]):
-        if audience != "Everyone" and audience != group:
+def scenario_inputs(ctx):
+    base = opportunities(ctx)
+    key = "office_splits_" + base["token"]
+    options = base["candidates"]["Room key"].tolist()
+    st.session_state[key] = [r for r in st.session_state.get(key, options[:2]) if r in options]
+    with ctx["tools"].expander("Office layout scenario"):
+        st.caption("Concept only. The picture has no measured dimensions. Splitting a room needs a space, access, acoustics, ventilation and AV review.")
+        chosen = st.multiselect("Rooms to explore splitting", options, **u.field_state(key, options[:2]))
+        seats = {}
+        capacities = base["rooms"].set_index("Room key").Capacity
+        for room in chosen:
+            token = sha256(room.encode()).hexdigest()[:12]
+            capacity = int(capacities[room])
+            default = min(capacity - 1, max(1, int(st.session_state.get("brief_seats_" + token, capacity // 2))))
+            input_key = "office_first_" + token
+            st.session_state[input_key] = min(capacity - 1, max(1, int(st.session_state.get(input_key, default))))
+            seats[room] = st.number_input(f'{room.split(" / ")[-1]} · first room seats', 1, capacity - 1,
+                                         **u.field_state(input_key, default))
+            st.caption(f"Second room: {capacity - seats[room]} seats. Seat count is held constant; physical fit is unverified.")
+        st.caption("At least one of the largest rooms in each selected office is retained. Only layout candidates with ≥70% coverage, ≥2 observed hours and ≥2 occupied hours are offered.")
+        st.caption("The initial concept tests up to two candidates, ordered by capacity. It is not an architectural recommendation. Clear the Rooms filter above to review the whole selected office.")
+    with ctx["tools"].expander("Office programme costs · GBP"):
+        mode = st.selectbox("Cost basis", ["Illustrative example", "Entered estimates", "Not costed"],
+                            **u.field_state("office_cost_mode", "Illustrative example"))
+        assumptions = None
+        if mode != "Not costed":
+            illustrative = mode == "Illustrative example"
+            prefix = "office_example_" if illustrative else "office_entered_"
+            assumptions = {"illustrative": illustrative}
+            for name, label, default in [
+                ("gross", "Annual gross benefit per controls-review room (£)", 1200.),
+                ("running", "Annual controls support per reviewed room (£)", 150.),
+                ("control_project", "One-off controls work per reviewed room (£)", 1800.),
+                ("split_project", "One-off partition, fit-out and AV per split (£)", 12000.),
+                ("extra_running", "Annual running cost per additional room (£)", 250.),
+            ]:
+                assumptions[name] = st.number_input(label, min_value=0., step=50.,
+                    **u.field_state(prefix + name, default if illustrative else 0.))
+            st.caption("Example amounts are invented for the webinar. Entered estimates are assumptions too. Benefit is a fixed amount per reviewed original room, not inferred from temperature, light or empty hours. New-room running costs are deducted; fit-out is shown separately.")
+        st.caption("One programme budget replaces individual room cases here, avoiding duplicate projects and mixed currencies. No rent saving, avoided expansion or increased revenue is included.")
+    return office_scenario(ctx, chosen, seats, assumptions)
+
+
+def map_html(ctx, model):
+    splits = {s["room"] for s in model["splits"]}
+    controls = set(model["controls"])
+    rooms = set(model["rooms"]["Room key"])
+    if not office_map.applies(ctx):
+        return ('<div class="office-no-map"><strong>One programme across the selected rooms</strong>'
+                f'<b>{len(controls)}</b><span>rooms to review for operating changes</span>'
+                '<small>The confirmed floorplan is available for London EC.</small></div>')
+    marks, names, mapped = [], [], set()
+    for spec in office_map.SPACES:
+        room = "London EC / " + spec["sources"][0]
+        if spec["kind"] != "room" or room not in rooms:
             continue
-        score = feedback_summary(records[records.audience.eq(group)])
-        cohorts.append(dict(name=name, count=score["responses"],
-                            value=u.fmt(score["positive"], "%", 1) if score["responses"] >= 5 else "—"))
-    token = sha256(room.encode()).hexdigest()[:12]
-    plan = pilot_plan(ctx, room, state.get("brief_route_" + token))
-    row = ctx["stats"].set_index("Room key").loc[room]
-    opportunity = dict(value=u.fmt(row["Coverage %"], "%"), title=f'{plan["name"]} · check the evidence',
-                       detail="No qualifying intervention in this scope. Confirm reporting, demand and room purpose.",
-                       source="Occupancy coverage")
-    if plan["focus"] == "Operating schedules":
-        from workplace.briefing import action_signal
-        preferred = state.get("brief_condition") if state.get("brief_control_room") == room else None
-        kinds = list(dict.fromkeys([preferred, "warm", "light"]))
-        for kind in kinds:
-            if kind not in {"warm", "light"}:
-                continue
-            signal = action_signal(ctx, room, kind)
-            if signal:
-                condition = "Warm" if kind == "warm" else "Bright"
-                opportunity = dict(value=u.fmt(signal["Evidence hours"], " h", 1),
-                    title=f'{plan["name"]} · review controls',
-                    detail=f"{condition} while recorded empty. Verify actual controls before changing the schedule.",
-                    source="Observed condition · not proof of wasted energy")
-                break
-    elif plan["focus"] == "Room layout":
-        capacity = row.Capacity
-        if pd.notna(capacity) and capacity > 0 and int(capacity) == capacity:
-            seats = state.get("brief_seats_" + token, min(100, max(1, int(capacity / 2))))
-            evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
-            layout = evaluate_layout(evidence, [seats])
-            opportunity = dict(value=f"{int(capacity)} → {seats}", title=f'{plan["name"]} · proposed seats',
-                detail=f'{u.fmt(layout["fit_percent"], "%", 1)} of observed occupied time fits. Peak: {u.fmt(evidence["peak"])} people; check larger-group needs.',
-                source="Replay of observed groups · not a demand forecast")
-    return dict(demand=demand, cohorts=cohorts, opportunity=opportunity, plan=plan,
-                case=scoped_case(case, room))
+        mapped.add(room)
+        kind = "split" if room in splits else "controls" if room in controls else "keep"
+        marks.append(f'<span class="office-pin {kind}" style="left:{spec["x"]}%;top:{spec["y"]}%" title="{escape(spec["name"])}">{spec["id"]}</span>')
+        names.append(f'<div><i class="{kind}">{spec["id"]}</i><span>{escape(spec["name"])}</span></div>')
+    extra = len(rooms - mapped)
+    return ('<div class="office-plan-layout"><div class="office-plan-image">'
+            f'<img src="{office_map.picture()}" alt="London office with conceptual split candidates in purple and controls reviews in green"/>'
+            + ''.join(marks) + '</div><div class="office-plan-key">' + ''.join(names)
+            + f'<small>{extra} other room{ "s" if extra != 1 else ""} included in totals; not positioned.</small></div></div>')
 
 
-def render(ctx, case):
-    from workplace.briefing import preferred_room
-    preferred_room(ctx)
-    room = st.session_state["selected_room"]
-    audience = st.session_state.get("feedback_audience", "Everyone")
-    records = c.feedback_in_scope(ctx, audience=audience)
-    model = closing_evidence(ctx, records, room, st.session_state, case)
-    demand, opportunity, plan = model["demand"], model["opportunity"], model["plan"]
-    source = "Demonstration telemetry" if ctx["demo"] else "Pulse observations"
-    cohort_html = "".join(
-        f'<div><strong>{escape(row["value"])}</strong><span>{escape(row["name"])}</span>'
-        f'<small>{row["count"]} sample responses</small></div>' for row in model["cohorts"])
-    next_step = {
-        "Operating schedules": "Validate the controls. Trial one schedule change.",
-        "Room layout": "Validate demand. Trial a reversible layout.",
-        "Evidence baseline": "Establish a reliable baseline before investing.",
-    }[plan["focus"]]
-    matched = model["case"]
-    value = (f'Entered estimate: {money(matched["annual_net"], matched["currency"])} annual net benefit · not measured.'
-             if matched else "Financial benefit to quantify with a baseline and a costed pilot.")
-    with st.container(key="decision_workspace"):
-        st.html('<div class="decision-grid">'
-            '<article class="decision-card demand"><div class="decision-kicker">01 · PROTECT WHAT WORKS</div>'
-            f'<div class="decision-number">{escape(demand["value"])}</div><h2>{escape(demand["title"])}</h2>'
-            f'<p>{escape(demand["detail"])}</p><div class="decision-source">{source}</div></article>'
-            '<article class="decision-card people"><div class="decision-kicker">02 · LISTEN TO PEOPLE</div>'
-            f'<div class="decision-cohorts">{cohort_html}</div><h2>Positive space ratings</h2>'
-            '<p>Validate the pattern with real feedback.</p>'
-            '<div class="decision-source">Invented sample feedback · ratings 4–5<br>— means fewer than 5 responses</div></article>'
-            '<article class="decision-card opportunity"><div class="decision-kicker">03 · TEST ONE IMPROVEMENT</div>'
-            f'<div class="decision-number">{escape(opportunity["value"])}</div><h2>{escape(opportunity["title"])}</h2>'
-            f'<p>{escape(opportunity["detail"])}</p><div class="decision-source">{escape(opportunity["source"])}</div></article></div>')
-        st.html(f'<section class="decision-proposal"><div class="decision-kicker">PROPOSED NEXT STEP · {escape(room)}</div>'
-            f'<h2>{escape(next_step)}</h2><div class="decision-owners"><div><span>OWNER</span><b>{escape(plan["owner"])}</b></div>'
-            f'<div><span>SUCCESS MEASURE</span><b>{escape(plan["measure"])}</b></div></div>'
-            f'<p class="decision-value"><strong>Value to prove: {escape(plan["benefit"]).lower()}.</strong> {escape(value)}</p></section>')
-    with ctx["tools"].expander("Conclusion evidence"):
-        st.write(f"Following {room} and its review route from Improve. Use the shared filters to change the scope; use Improve to choose another room or route.")
-        st.write(plan["gate"])
-        st.caption("A proposal, not an approved or completed project. Agree a baseline, budget and review date before the pilot. No measured savings or after-results are connected.")
+def mix_html(model):
+    scale = max([1, *model["before_mix"], *model["after_mix"]])
+    rows = []
+    for label, before, after in zip(["Focus · 1–2", "Small · 3–6", "Medium · 7–12", "Large · 13+"], model["before_mix"], model["after_mix"]):
+        bars = ''.join(f'<div class="office-bar-line"><div class="office-bar-track"><i class="{kind}" style="width:{n/scale*100:.2f}%"></i></div><b>{n}</b></div>'
+                       for kind, n in [("today", before), ("concept", after)])
+        rows.append(f'<div class="office-mix-row"><span>{label}<small>seats</small></span><div>{bars}</div></div>')
+    return ''.join(rows)
+
+
+def render(ctx, case=None):
+    model = scenario_inputs(ctx)
+    costs, count = model["costs"], model["additional"]
+    cost_basis = "Illustrative annual net benefit" if costs and costs["illustrative"] else "Estimated annual net benefit"
+    net = money(costs["annual_net"], "GBP") if costs else "Not costed"
+    cost_detail = f'{len(model["controls"])} controls-review rooms · after added running costs' if costs else "Set programme assumptions in Presenter tools"
+    cards = [
+        ("savings", cost_basis if costs else "Annual net operating benefit", net, cost_detail),
+        ("capacity", "Concept additional rooms", f'+{count}', f'{model["before_count"]} today → {model["after_count"]} in concept · physical fit unverified'),
+        ("fit", "Observed group fit", u.fmt(model["fit"], "%", 1), f'{len(model["ready"])} of {model["before_count"]} rooms qualify · occupied-time replay'),
+    ]
+    with st.container(key="office_opportunity"):
+        st.html('<div class="office-outcomes">' + ''.join(
+            f'<article class="office-outcome {kind}"><span>{escape(label)}</span><strong>{escape(value)}</strong><small>{escape(detail)}</small></article>'
+            for kind, label, value, detail in cards) + '</div>')
+        concepts = ''.join(f'<span><b>{escape(s["name"])}</b> {s["before"]} → {s["after"][0]} + {s["after"][1]} seats · {u.fmt(s["fit"], "%", 1)} fit</span>' for s in model["splits"])
+        if not concepts:
+            concepts = '<span>No room splits selected or supported for exploration in this scope.</span>'
+        st.html('<div class="office-comparison"><section class="office-map-panel"><h2>Where to focus</h2>'
+                + map_html(ctx, model)
+                + '<div class="office-map-legend"><span><i class="split"></i>Explore a split</span><span><i class="controls"></i>Review controls</span><span><i class="keep"></i>Retain</span></div></section>'
+                '<section class="office-mix-panel"><div class="office-mix-title"><h2>A different room mix</h2><div><i class="today"></i>Today <i class="concept"></i>Concept</div></div>'
+                + mix_html(model) + f'<div class="office-split-summary">{concepts}</div>'
+                '<p class="office-fit-note">Groups stay in their original room or its larger replacement. New bookings and simultaneous demand are not predicted.</p></section></div>')
+        investment = f' · {money(costs["project_cost"], "GBP")} one-off investment' if costs else ''
+        st.html(f'<section class="office-programme"><div><strong>One office programme · {len(model["controls"])} controls reviews + {count} concept splits</strong>'
+                f'<span>Workplace + Facilities + IT · Confirm dimensions, bookings and budget; then pilot and remeasure.</span></div>'
+                f'<div><b>{"Illustrative costs" if costs and costs["illustrative"] else "Entered cost assumptions" if costs else "Costing required"}{escape(investment)}</b>'
+                '<small>Potential avoided expansion is a separate benefit; no rent saving is claimed.</small></div></section>')
+    with ctx["tools"].expander("Office evidence and validation"):
+        st.write(f'{model["before_count"]} positive-capacity meeting rooms in the selected filters; {len(model["ready"])} pass the occupancy coverage checks. The selected room from Improve does not narrow these totals; the shared Rooms filter does.')
+        st.write("The concept holds the total seat count constant while exploring two rooms in place of one. It does not establish that partitions, access, ventilation, fire routes or accessibility fit the building. A measured plan and professional design review are still required.")
+        st.write(f'Fit weights valid occupied room-hours across qualifying rooms: {model["occupied"]:.1f} observed, {model["exceeds"]:.1f} exceed the largest proposed replacement. Missing observations remain unknown. High overall fit can hide individual peaks; review each changed room below.')
+        st.write("No groups are moved between rooms, pooled across time or divided between the two replacements. Booking conflicts, rejected bookings, concurrent demand and room purpose must be checked before approval. Real employee and guest feedback should validate the pilot; synthetic feedback does not establish an improvement.")
+        if model["splits"]:
+            st.dataframe([{ "Room": s["room"], "Current seats": s["before"], "Concept seats": " + ".join(map(str, s["after"])),
+                            "Observed fit %": s["fit"], "Hours exceeding": s["exceeds"], "Observed peak": s["peak"]} for s in model["splits"]], hide_index=True)
+        st.write("Controls-review rooms: " + (", ".join(model["controls"]) or "None"))
+        st.caption("Each controls-review room is counted once even if both warmth and light trigger a review. Neither condition proves energy use; validate controller state and meters before assigning a real saving. No changes are sent to the building.")
+        if costs:
+            st.write(f'Annual gross benefit {money(costs["annual_savings"], "GBP")} less added annual running costs {money(costs["annual_extra_cost"], "GBP")} = annual net benefit {money(costs["annual_net"], "GBP")}. One-off programme investment: {money(costs["project_cost"], "GBP")}.')
+            st.caption("Operating benefit, extra meeting capacity and potential avoided expansion are distinct outcomes, not amounts to add together. All finances here are programme assumptions, not measured results.")

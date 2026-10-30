@@ -38,7 +38,7 @@ def shell(active, title, subtitle, briefing=False):
         ("Understand", [("app.py", "Overview", "dashboard"), ("pages/Spaces.py", "Spaces", "meeting_room"),
                         ("pages/Feedback.py", "Feedback", "sentiment_satisfied"), ("pages/Environment.py", "Environment", "thermostat")]),
         ("Improve", [("pages/Insights.py", "Opportunities", "insights"), ("pages/Scenarios.py", "Scenarios", "compare_arrows"),
-                     ("pages/Value.py", "Value & ROI", "finance_mode"), ("pages/Next_Steps.py", "Next steps", "flag")]),
+                     ("pages/Value.py", "Value & ROI", "finance_mode"), ("pages/Next_Steps.py", "Office opportunity", "flag")]),
         ("Operate", [("pages/Administration.py", "Operations", "tune"), ("pages/AI_Search.py", "Ask the data", "search")])]
     tools = None
     with st.sidebar:
@@ -50,7 +50,7 @@ def shell(active, title, subtitle, briefing=False):
                                       ("pages/Spaces.py", "02 · Room fit", "meeting_room"),
                                       ("pages/Feedback.py", "03 · Experience", "sentiment_satisfied"),
                                       ("pages/Environment.py", "04 · Improve", "bolt"),
-                                      ("pages/Next_Steps.py", "05 · Next steps", "flag")]:
+                                      ("pages/Next_Steps.py", "05 · Office opportunity", "flag")]:
                 st.page_link(path, label=label, icon=f":material/{icon}:", width="stretch")
             tools = st.expander("Presenter tools")
         else:
@@ -68,7 +68,7 @@ def shell(active, title, subtitle, briefing=False):
                     st.write("**1½–3½ min · Room fit.** The current and smaller-room layouts are already visible. Check peak demand before changing capacity.")
                     st.write("**3½–5½ min · Experience.** Show employee and guest ratings; submit one response on the open companion.")
                     st.write("**5½–7 min · Improve.** Follow the selected room and run one simulation or test its layout.")
-                    st.write("**7–8 min · Next steps.** Pause on the three takeaways. Close on the proposed pilot, owner and success measure; no extra interaction is needed.")
+                    st.write("**7–8 min · Office opportunity.** Show the combined operating benefit, concept extra rooms and observed group fit. Compare today’s room mix with the concept; close on validating the office programme. Costs are illustrative and physical layout is unverified.")
                     st.write("**8–10½ min · Build.** Customer questions → Pulse observations in Google Sheets → Python, Streamlit and Plotly → ChatGPT-assisted iteration → GitHub and Streamlit hosting.")
                     st.caption("Use Custom dates and Hold data for presentation. Load all five pages before presenting. Feedback is synthetic; controls are simulated; financial values are assumptions.")
                 with st.expander("Detailed analysis"):

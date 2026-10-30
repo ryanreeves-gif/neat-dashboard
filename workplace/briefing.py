@@ -28,8 +28,8 @@ CHAPTERS = [
      "Listen to employees and guests. Find the friction. Protect what they value."),
     ("Environment", "pages/Environment.py", "The next move", "What should we do next?",
      "One room. One practical change. A result you can measure."),
-    ("Next steps", "pages/Next_Steps.py", "Next steps", "One room. One change. Prove the value.",
-     "Three takeaways. One proposed next step."),
+    ("Office opportunity", "pages/Next_Steps.py", "Office opportunity", "More value from the whole office.",
+     "Review running costs. Explore a better room mix. Validate one office-wide programme."),
 ]
 
 
@@ -489,7 +489,7 @@ def run(active):
     ctx["tools"] = tools
     with tools:
         st.selectbox("Sentiment audience", ["Everyone", *AUDIENCES], **u.field_state("feedback_audience", "Everyone"))
-    case = finance_case(ctx)
+    case = None if active == "Office opportunity" else finance_case(ctx)
     locations = ", ".join(sorted(ctx["inventory"].Location.unique()))
     # The analysis boundary can be midnight on the following day; show the
     # inclusive calendar date selected in the filter instead.
@@ -497,10 +497,10 @@ def run(active):
     held = f' · Held snapshot {ctx["fetched"]:%H:%M}' if st.session_state.get("hold_observations") else ""
     html(f'<div class="brief-scope"><span>{escape(scope)}</span><b>{"DEMO telemetry" if ctx["demo"] else "Pulse observations"} · {u.fmt(ctx["summary"]["coverage"], "%")} coverage{held}</b></div>')
     from workplace.decision import render as decision
-    {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action, "Next steps": decision}[active](ctx, case)
+    {"Overview": summary, "Spaces": space, "Feedback": experience, "Environment": action, "Office opportunity": decision}[active](ctx, case)
     endings = ["Approve one pilot. Measure what changes.", "Use observed demand to test the room mix.",
                "Turn a moment of feedback into a better next visit.", "Test the response, then agree the next step.",
-               "Agree the baseline, owner and review date. Scale what works."]
+               "Validate the office plan. Pilot the changes. Measure the outcome."]
     left, right = st.columns([2.4, 1], vertical_alignment="center")
     with left:
         html(f'<div class="brief-end"><span><strong>{index+1:02d} / {len(CHAPTERS):02d}</strong> &nbsp; {endings[index]}</span></div><div class="brief-proof">Feedback is synthetic · Costs are assumptions · Controls are simulated</div>')
