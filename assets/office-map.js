@@ -77,7 +77,7 @@ export default function(component) {
       pin.setAttribute('aria-label', row.name + ', ' + products(row) + ', ' + lens + ' ' + value(row));
       pin.title = row.name + ' · ' + products(row);
     });
-    root.querySelector('.map-legend').textContent = isImprove ? 'Green: controls review · Purple: layout review · Gold: check evidence first. Labels show where both reviews apply.' : isExperience ? 'Invented space ratings / 5. At least 5 responses are needed; — means too few or none. Purple outline: room on the companion.' : isFit ? 'Map percentages show time in use. Purple outlines mark the selected room; — means insufficient usage evidence.' : lens === 'usage' ? 'Time in use · — means no qualifying room-use evidence' : lens === 'temperature' ? 'Mean °C · recorded conditions, not a comfort pass/fail · — means no single reading' : 'Invented space ratings / 5 · at least 5 responses · — means no qualifying sample';
+    root.querySelector('.map-legend').textContent = isImprove ? 'Green: controls · Purple: layout · Gold: evidence first. Select a room to see its next step.' : isExperience ? 'Invented space ratings / 5. At least 5 responses are needed; — means too few or none. Purple outline: room on the companion.' : isFit ? 'Map percentages show time in use. Purple outlines mark the selected room; — means insufficient usage evidence.' : lens === 'usage' ? 'Time in use · — means no qualifying room-use evidence' : lens === 'temperature' ? 'Mean °C · recorded conditions, not a comfort pass/fail · — means no single reading' : 'Invented space ratings / 5 · at least 5 responses · — means no qualifying sample';
   }
   root.querySelectorAll('[data-lens]').forEach(b => b.onclick = () => {
     lens = b.dataset.lens; stateHost.dataset.officeLens = lens; draw();

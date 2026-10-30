@@ -192,7 +192,7 @@ def render_improve(ctx, room):
     from workplace.briefing import heading, html
     rows = improve_rows(ctx)
     selected = next((r["id"] for r in rows if r["key"] == room and r["allowed"]), None)
-    heading("Where should we act?", "Select a room to see its next step.")
+    heading("Where should we act?")
 
     def picked():
         event = st.session_state.get("office_improve_map_component", {})
@@ -202,7 +202,6 @@ def render_improve(ctx, room):
              key="office_improve_map_component", on_picked_change=picked)
     if selected is None:
         html(f'<div class="brief-small"><b>{escape(room.split(" / ", 1)[-1])}</b> has no confirmed map position. Its recommendation is shown alongside.</div>')
-    html('<div class="brief-small">Suggested reviews from the selected observations. Use the room menu for other spaces.</div>')
 
 
 def render(ctx, portfolio):

@@ -394,7 +394,7 @@ def improve_controls(ctx, room):
         st.session_state["brief_workflow"] = result
     name = ctx["inventory"].set_index("Room key").loc[room, "Room Name"]
     components.html(animation_html(settings, name, result["payload"]["created_at"] if result else None,
-                                   compact=True), height=285, scrolling=True)
+                                   compact=True), height=255, scrolling=True)
     return result
 
 
@@ -442,7 +442,7 @@ def action(ctx, case):
             if len(options) > 1:
                 labels = {"Operating schedules": "Controls review", "Room layout": "Room layout"}
                 focus = st.segmented_control("Review route", options, format_func=labels.get,
-                                             selection_mode="single", required=True,
+                                             selection_mode="single", required=True, label_visibility="collapsed",
                                              **u.field_state(route_key, options[0]))
             plan = pilot_plan(ctx, room, focus)
             improve_recommendation(ctx, room, plan)
