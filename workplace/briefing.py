@@ -138,7 +138,8 @@ def summary(ctx, case):
     candidates = p.opportunity_rows(portfolio)
     telemetry = "Sample telemetry" if ctx["demo"] else "Pulse observations"
     metrics([
-        ("Estate time in use", u.fmt(ctx["summary"]["utilisation"], "%", 1), "Occupied / valid observed hours", telemetry, "forest", False),
+        ("Room time in use", u.fmt(ctx["summary"]["utilisation"], "%", 1),
+         f"Any monitored room occupied: ≥{u.fmt(a.any_room_occupied_percent(ctx["samples"], a.window_hours(ctx["start"], ctx["end"], ctx["office"])), "%", 1)} of scheduled time" if ctx["summary"]["valid_hours"] > 0 else "Any monitored room: no occupancy data", telemetry + " · not whole-office occupancy", "forest", False),
         ("Positive space ratings", u.fmt(feedback["positive"], "%", 1), f"{feedback['responses']:,} responses · {audience}", "Invented sample feedback · ratings 4–5", "purple", False),
         ("Rooms to review", str(len(candidates)), f"{int(portfolio.Controls.sum())} controls · {int(portfolio.Layout.sum())} layout reviews", "Review signals · routes can overlap", "rain", False),
         ("Annual net saving" if case else "Savings opportunity", money(case["annual_net"], case["currency"]) if case else "To quantify",

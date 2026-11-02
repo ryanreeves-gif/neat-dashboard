@@ -142,6 +142,30 @@ def weighted_quantile(values: pd.Series, weights: pd.Series, q: float = .9) -> f
     return float(v.loc[v.w.cumsum() >= q * v.w.sum(), "v"].iloc[0])
 
 
+def any_room_occupied_percent(samples: pd.DataFrame, scheduled_hours: float) -> float:
+    """Minimum share of scheduled time with someone in any monitored room.
+
+    Merge simultaneous occupied intervals once. Unknown or unmonitored time is
+    never called empty, so the result is a lower bound, not building occupancy.
+    """
+    if scheduled_hours <= 0 or samples.empty or not samples["Valid hours"].gt(0).any():
+        return np.nan
+    intervals = samples.loc[samples["Occupied hours"].gt(0), ["Start", "End"]].sort_values("Start")
+    duration = 0.0
+    start = end = None
+    for row in intervals.itertuples(index=False):
+        if start is None:
+            start, end = row.Start, row.End
+        elif row.Start <= end:
+            end = max(end, row.End)
+        else:
+            duration += (end - start).total_seconds() / 3600
+            start, end = row.Start, row.End
+    if start is not None:
+        duration += (end - start).total_seconds() / 3600
+    return min(100.0, 100.0 * duration / scheduled_hours)
+
+
 def summarise(samples: pd.DataFrame, hours: float, room_count: int) -> dict:
     valid = float(samples["Valid hours"].sum())
     occupied = float(samples["Occupied hours"].sum())
