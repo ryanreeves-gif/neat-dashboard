@@ -84,6 +84,27 @@ def mix_html(model):
     return ''.join(rows)
 
 
+def calculation_panel(model):
+    costs, assumptions = model["costs"], model["assumptions"]
+    if not costs or not assumptions:
+        st.html('<section class="connection-explainer"><h2>Benefit not costed</h2><p class="connection-intro">Open Presenter tools → Office programme costs to enter assumptions or choose the illustrative example.</p></section>')
+        return
+    controls, extra = len(model["controls"]), model["additional"]
+    currency = lambda value: money(value, "GBP")
+    basis = "Illustrative example" if costs["illustrative"] else "Entered estimates"
+    lines = [
+        ("Annual gross operating benefit", f'{controls} rooms × {currency(assumptions["gross"])}', controls * assumptions["gross"]),
+        ("Annual controls support", f'{controls} rooms × {currency(assumptions["running"])}', -controls * assumptions["running"]),
+        ("Annual running cost of extra rooms", f'{extra} rooms × {currency(assumptions["extra_running"])}', -extra * assumptions["extra_running"]),
+    ]
+    rows = ''.join(f'<div class="benefit-line"><span><b>{escape(label)}</b><small>{escape(detail)}</small></span><strong>{escape(currency(amount))}</strong></div>' for label, detail, amount in lines)
+    st.html(f'<section class="connection-explainer benefit-explainer"><div class="connection-eyebrow">{escape(basis.upper())} · ANNUAL</div>'
+        '<h2>Where the benefit comes from</h2><p class="connection-intro">A programme estimate based on the current room selection and assumptions.</p>'
+        f'{rows}<div class="benefit-total"><span>Annual net benefit</span><strong>{escape(currency(costs["annual_net"]))}</strong></div>'
+        f'<div class="benefit-investment"><b>One-off investment: {escape(currency(costs["project_cost"]))}</b><small>{controls} controls reviews × {escape(currency(assumptions["control_project"]))} + {extra} splits × {escape(currency(assumptions["split_project"]))}. Shown separately from annual net benefit.</small></div>'
+        '<p class="connection-note"><b>Assumptions, not measured savings.</b> The gross benefit is an entered amount per room; temperature, light and empty hours do not calculate a cash saving. No rent saving or avoided expansion is included.</p></section>')
+
+
 def render(ctx, case=None):
     model = scenario_inputs(ctx)
     costs, count = model["costs"], model["additional"]
@@ -96,9 +117,12 @@ def render(ctx, case=None):
         ("fit", "Observed group fit", u.fmt(model["fit"], "%", 1), f'{len(model["ready"])} of {model["before_count"]} rooms qualify · occupied-time replay'),
     ]
     with st.container(key="office_opportunity"):
-        st.html('<div class="office-outcomes">' + ''.join(
-            f'<article class="office-outcome {kind}"><span>{escape(label)}</span><strong>{escape(value)}</strong><small>{escape(detail)}</small></article>'
-            for kind, label, value, detail in cards) + '</div>')
+        for column, (kind, label, value, detail) in zip(st.columns(3, gap="small"), cards):
+            with column, st.container(key="office_outcome_" + kind):
+                st.html(f'<article class="office-outcome {kind}"><span>{escape(label)}</span><strong>{escape(value)}</strong><small>{escape(detail)}</small></article>')
+                if kind == "savings":
+                    with st.popover("View calculation", icon=":material/calculate:", width="stretch"):
+                        calculation_panel(model)
         concepts = ''.join(f'<span><b>{escape(s["name"])}</b> {s["before"]} → {s["after"][0]} + {s["after"][1]} seats · {u.fmt(s["fit"], "%", 1)} fit</span>' for s in model["splits"])
         if not concepts:
             concepts = '<span>No room splits selected or supported for exploration in this scope.</span>'

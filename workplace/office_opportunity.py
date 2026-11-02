@@ -81,4 +81,4 @@ def office_scenario(ctx, split_rooms=(), seats=None, assumptions=None):
     return {**model, "splits": details, "additional": len(details), "before_count": len(current),
             "after_count": len(proposed), "before_mix": room_mix(current), "after_mix": room_mix(proposed),
             "fit": 100 * fits / occupied if occupied else None, "occupied": occupied, "exceeds": exceeds,
-            "costs": programme_costs(len(model["controls"]), len(details), assumptions)}
+            "costs": programme_costs(len(model["controls"]), len(details), assumptions), "assumptions": assumptions}
