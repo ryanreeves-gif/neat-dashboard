@@ -184,6 +184,8 @@ def summary(ctx, case):
             html(f'<article class="brief-recommendation"><div class="brief-label">RECOMMENDED NEXT STEP · {escape(plan["name"])}</div>'
                  f'<h3>{escape(plan["title"])}</h3>'
                  f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
+    from workplace.technology import render as technology_overview
+    technology_overview(ctx)
     with ctx["tools"].expander("Room evidence and methodology"):
         st.write("Office time in use is a minimum share of scheduled time with at least one monitored room occupied; overlap is counted once. Missing observations remain unknown and open areas are not measured. Average room use pools occupied room-hours over valid observed room-hours. Usage leaders need 70% coverage and two observed hours.")
         st.write("Sample sentiment leaders need at least five responses and are independent of telemetry coverage. Usage ties use one decimal place; sentiment ties use two. An audience filter changes ratings, never usage or improvement signals.")
