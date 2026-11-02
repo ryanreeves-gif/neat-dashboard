@@ -206,6 +206,12 @@ def space(ctx, case):
         space_comparison(ctx, room_picker(ctx))
 
 
+def fit_concept(capacity, seats, qualifies):
+    """Reuse one evidence-gated room-mix concept across both presentation pages."""
+    second = capacity - seats if qualifies and capacity and capacity >= 8 and 0 < seats < capacity else None
+    return sorted([seats, second], reverse=True) if second else [seats]
+
+
 def space_comparison(ctx, room):
     r = ctx["stats"].set_index("Room key").loc[room]
     evidence = room_evidence(ctx["samples"], room, a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
@@ -217,10 +223,7 @@ def space_comparison(ctx, room):
         st.caption("Replays observed groups. It does not predict new bookings, savings or demand for a second room.")
         st.page_link("pages/Scenarios.py", label="Explore other layouts", icon=":material/compare_arrows:")
     qualifies = "Room layout" in pilot_options(ctx, room)
-    # Two-room concept only when existing observations support a smaller room.
-    # A measured floor plan is needed to establish whether it can be built.
-    second = capacity - seats if qualifies and capacity and capacity >= 8 and 0 < seats < capacity else None
-    proposal = sorted([seats, second], reverse=True) if second else [seats]
+    proposal = fit_concept(capacity, seats, qualifies)
     layout = evaluate_layout(evidence, proposal)
     if qualifies:
         takeaway(f'{r["Room Name"]}: most groups need fewer seats.',
@@ -430,6 +433,13 @@ def improve_controls(ctx, room):
         result = {"signature": signature, "payload": {**config, "created_at": datetime.now(timezone.utc).isoformat(),
                   "stages": ["Demo request", "Simulated review", "Simulated override", "Assumed schedule restored"]}}
         st.session_state["brief_workflow"] = result
+    with st.popover("How the connection works", icon=":material/account_tree:", width="stretch"):
+        st.markdown("**Illustrative ServiceNow and building-controls workflow**")
+        st.write("1. **Detect:** a Pulse observation or user request identifies a room and the proposed change.")
+        st.write("2. **Review:** ServiceNow receives a request for the appropriate team and applies agreed approval rules.")
+        st.write("3. **Connect:** an authorised integration maps the room to the right BMS gateway and checks safe limits.")
+        st.write("4. **Act and restore:** the gateway requests a temporary lighting, AC or ventilation change, then the normal schedule resumes.")
+        st.caption("Demonstration only: no ServiceNow ticket, BMS command or gateway acknowledgement is created. A real deployment needs integration, access controls and facilities approval.")
     name = ctx["inventory"].set_index("Room key").loc[room, "Room Name"]
     components.html(animation_html(settings, name, result["payload"]["created_at"] if result else None,
                                    compact=True), height=255, scrolling=True)
@@ -447,7 +457,9 @@ def improve_layout(ctx, room):
         seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(key, default))
     with explanation:
         html('<div class="brief-small">Try a reversible layout first. This replays observed groups; it does not predict future demand or savings.</div>')
-    layout_options(row, evidence, capacity, seats, evaluate_layout(evidence, [seats]), True, compact=True)
+    proposal = fit_concept(capacity, seats, "Room layout" in pilot_options(ctx, room))
+    layout_options(row, evidence, capacity, proposal[0], evaluate_layout(evidence, proposal), True,
+                   compact=True, second=proposal[1] if len(proposal) == 2 else None)
 
 
 def improve_value(plan, case, room):
