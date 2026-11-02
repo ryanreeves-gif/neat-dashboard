@@ -434,12 +434,18 @@ def improve_controls(ctx, room):
                   "stages": ["Demo request", "Simulated review", "Simulated override", "Assumed schedule restored"]}}
         st.session_state["brief_workflow"] = result
     with st.popover("How the connection works", icon=":material/account_tree:", width="stretch"):
-        st.markdown("**Illustrative ServiceNow and building-controls workflow**")
-        st.write("1. **Detect:** a Pulse observation or user request identifies a room and the proposed change.")
-        st.write("2. **Review:** ServiceNow receives a request for the appropriate team and applies agreed approval rules.")
-        st.write("3. **Connect:** an authorised integration maps the room to the right BMS gateway and checks safe limits.")
-        st.write("4. **Act and restore:** the gateway requests a temporary lighting, AC or ventilation change, then the normal schedule resumes.")
-        st.caption("Demonstration only: no ServiceNow ticket, BMS command or gateway acknowledgement is created. A real deployment needs integration, access controls and facilities approval.")
+        st.html('''<section class="connection-explainer" aria-label="Illustrative ServiceNow and building-controls workflow">
+          <div class="connection-eyebrow">ILLUSTRATIVE WORKFLOW</div>
+          <h2>From observation to action</h2>
+          <p class="connection-intro">How Pulse, ServiceNow and a BMS gateway could work together.</p>
+          <ol>
+            <li><span>1</span><div><b>Detect</b><p>A Pulse observation or user request identifies a room and the proposed change.</p></div></li>
+            <li><span>2</span><div><b>Review</b><p>ServiceNow receives a request for the appropriate team and applies agreed approval rules.</p></div></li>
+            <li><span>3</span><div><b>Connect</b><p>An authorised integration maps the room to the right BMS gateway and checks safe limits.</p></div></li>
+            <li><span>4</span><div><b>Act and restore</b><p>The gateway requests a temporary lighting, AC or ventilation change, then the normal schedule resumes.</p></div></li>
+          </ol>
+          <p class="connection-note"><b>Demonstration only.</b> No ServiceNow ticket, BMS command or gateway acknowledgement is created. A real deployment needs integration, access controls and facilities approval.</p>
+        </section>''')
     name = ctx["inventory"].set_index("Room key").loc[room, "Room Name"]
     components.html(animation_html(settings, name, result["payload"]["created_at"] if result else None,
                                    compact=True), height=255, scrolling=True)
