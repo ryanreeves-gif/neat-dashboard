@@ -45,13 +45,15 @@ def takeaway(title, detail, caution=False):
     html(f'<section class="brief-takeaway {"caution" if caution else ""}"><h2>{escape(title)}</h2><p>{escape(detail)}</p></section>')
 
 
-def metrics(items, stacked=False):
+def metrics(items, stacked=False, first_card=None):
     """label, value, detail, source, colour, textual value."""
     cards = []
     for label, value, detail, source, colour, words in items:
         cards.append(f'<article class="brief-metric {colour}"><div class="brief-label">{escape(label)}</div>'
                      f'<div class="brief-number {"words" if words else ""}">{escape(str(value))}</div>'
                      f'<div class="brief-detail">{escape(detail)}</div><div class="brief-source {"assumption" if colour == "sunrise" else ""}">{escape(source)}</div></article>')
+    if first_card is not None:
+        cards[0] = first_card
     html(f'<div class="brief-metrics {"stacked" if stacked else ""}">' + ''.join(cards) + '</div>')
 
 
@@ -137,6 +139,20 @@ def summary(ctx, case):
     feedback = feedback_summary(records)
     candidates = p.opportunity_rows(portfolio)
     telemetry = "Sample telemetry" if ctx["demo"] else "Pulse observations"
+    room_filter = st.session_state.get("room_filter", [])
+    room_value = u.fmt(ctx["summary"]["utilisation"], "%", 1)
+    if len(room_filter) == 1:
+        selected_name = room_filter[0].split(" / ")[-1]
+        utilisation_card = (f'<article class="brief-metric forest utilisation-card"><div class="brief-label">UTILISATION · {escape(selected_name)}</div>'
+            f'<div class="brief-number">{escape(room_value)}</div><div class="brief-detail">Room time in use · valid observations</div>'
+            f'<div class="brief-source">{telemetry} · selected room</div></article>')
+    else:
+        present = a.any_room_occupied_percent(ctx["samples"], a.window_hours(ctx["start"], ctx["end"], ctx["office"]))
+        office_value = "≥" + u.fmt(present, "%", 1) if pd.notna(present) else "—"
+        utilisation_card = (f'<article class="brief-metric forest utilisation-card"><div class="brief-label">UTILISATION</div>'
+            f'<div class="utilisation-pair"><div><div class="brief-number">{escape(office_value)}</div><div class="brief-detail">Office time in use</div></div>'
+            f'<div><div class="brief-number">{escape(room_value)}</div><div class="brief-detail">Average room use</div></div></div>'
+            f'<div class="brief-source">{telemetry} · any monitored room / valid room-hours</div></article>')
     metrics([
         ("Room time in use", u.fmt(ctx["summary"]["utilisation"], "%", 1),
          f"Any monitored room occupied: ≥{u.fmt(a.any_room_occupied_percent(ctx["samples"], a.window_hours(ctx["start"], ctx["end"], ctx["office"])), "%", 1)} of scheduled time" if ctx["summary"]["valid_hours"] > 0 else "Any monitored room: no occupancy data", telemetry + " · not whole-office occupancy", "forest", False),
@@ -145,7 +161,7 @@ def summary(ctx, case):
         ("Annual net saving" if case else "Savings opportunity", money(case["annual_net"], case["currency"]) if case else "To quantify",
          case["room"] if case else "Scope and cost one pilot",
          "Illustrative assumptions" if case and case["example"] else "Entered assumptions" if case else "No measured cost or energy saving", "sunrise", not bool(case)),
-    ])
+    ], first_card=utilisation_card)
     from workplace import office_map
     if office_map.applies(ctx):
         office_map.render(ctx, portfolio)
@@ -169,7 +185,7 @@ def summary(ctx, case):
                  f'<h3>{escape(plan["title"])}</h3>'
                  f'<small><b>Owner</b> {escape(plan["owner"])}<br><b>Measure</b> {escape(plan["measure"])}</small></article>')
     with ctx["tools"].expander("Room evidence and methodology"):
-        st.write("Usage leaders need positive capacity, at least 70% occupancy coverage and two observed hours. The estate percentage pools all valid observed hours. Missing time is unknown, not empty.")
+        st.write("Office time in use is a minimum share of scheduled time with at least one monitored room occupied; overlap is counted once. Missing observations remain unknown and open areas are not measured. Average room use pools occupied room-hours over valid observed room-hours. Usage leaders need 70% coverage and two observed hours.")
         st.write("Sample sentiment leaders need at least five responses and are independent of telemetry coverage. Usage ties use one decimal place; sentiment ties use two. An audience filter changes ratings, never usage or improvement signals.")
         st.write("The performance comparison chart only includes rooms passing both checks. Bubble sizes reflect recorded capacity; colour shows a possible review route. Reference lines are guides, not performance targets. Short periods and sample ratings cannot establish the best room design.")
         st.write("Controls reviews flag warm or bright empty-room observations. Lux cannot prove electric lights were on. Layout reviews flag rooms with two occupied hours and a 90th-percentile group no larger than half their capacity. Both routes require validation before action.")

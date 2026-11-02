@@ -114,4 +114,5 @@ div[class*="st-key-brief_panel_"]{background:white;border:1px solid #E2E7E9;bord
 @media(max-width:1150px){.office-plan-layout{grid-template-columns:150px minmax(0,1fr);gap:8px}.office-plan-image{width:150px}.office-plan-key>div{font-size:12px}.office-mix-title{display:block}.office-mix-title>div{margin:0 0 8px}}
 @media(max-width:850px){.office-outcomes{grid-template-columns:1fr}.office-comparison,.office-programme{grid-template-columns:1fr}.office-plan-layout{grid-template-columns:190px minmax(0,1fr)}.office-plan-image{width:190px}}
 @media(max-width:430px){.office-plan-layout{grid-template-columns:135px minmax(0,1fr)}.office-plan-image{width:135px}.office-mix-row{grid-template-columns:95px minmax(0,1fr);gap:8px}}
+.utilisation-pair{display:grid;grid-template-columns:1fr 1fr;gap:7px}.utilisation-pair>div{min-width:0}.utilisation-pair .brief-number{font-size:clamp(20px,1.85vw,27px);white-space:nowrap}.utilisation-pair .brief-detail{font-size:10px;line-height:1.25}
 </style>
