@@ -216,15 +216,19 @@ def space_comparison(ctx, room):
         seats = st.number_input("Proposed room seats", 1, 100, **u.field_state(model_key, default))
         st.caption("Replays observed groups. It does not predict new bookings, savings or demand for a second room.")
         st.page_link("pages/Scenarios.py", label="Explore other layouts", icon=":material/compare_arrows:")
-    layout = evaluate_layout(evidence, [seats])
     qualifies = "Room layout" in pilot_options(ctx, room)
+    # Two-room concept only when existing observations support a smaller room.
+    # A measured floor plan is needed to establish whether it can be built.
+    second = capacity - seats if qualifies and capacity and capacity >= 8 and 0 < seats < capacity else None
+    proposal = sorted([seats, second], reverse=True) if second else [seats]
+    layout = evaluate_layout(evidence, proposal)
     if qualifies:
         takeaway(f'{r["Room Name"]}: most groups need fewer seats.',
                  f'90% of occupied time had {u.fmt(r["P90 attendance"])} people or fewer in this {u.fmt(r.Capacity)}-seat room.')
     else:
         takeaway("Check the demand before changing the layout.",
                  "This view does not establish a room-size recommendation. The comparison below is exploratory.", True)
-    layout_options(r, evidence, capacity, seats, layout, qualifies)
+    layout_options(r, evidence, capacity, proposal[0], layout, qualifies, second=proposal[1] if len(proposal) == 2 else None)
     data = ctx["all_data"]
     if not ctx["demo"]:
         data = data[data.Location.isin(["London EC", "Oslo EC"])]
@@ -234,7 +238,7 @@ def space_comparison(ctx, room):
         html(f'<div class="brief-small"><b>Similar-size room:</b> {escape(comparison)}. Capacity match only; purpose and location can differ.</div>')
 
 
-def layout_options(row, evidence, capacity, seats, layout, qualifies, compact=False):
+def layout_options(row, evidence, capacity, seats, layout, qualifies, compact=False, second=None):
     if not capacity:
         st.info("Confirm a positive whole-number room capacity before comparing layouts.")
         return
@@ -244,14 +248,26 @@ def layout_options(row, evidence, capacity, seats, layout, qualifies, compact=Fa
     for column, label, count, result, key in zip(columns, ["Current room", "Smaller-room option"],
             [capacity, seats], [current, layout], ["current", "proposed"]):
         with column, st.container(key="brief_panel_layout_" + key):
-            heading(f"{label} · {count} seats")
+            is_split = key == "proposed" and second is not None
+            heading(f"Concept · {count} + {second} seats" if is_split else f"{label} · {count} seats")
             if evidence["typical"] is not None:
                 svg = v.room_capacity_svg(evidence["typical"], count).replace(v.BLUE, "#5F259F").replace("Blue represents", "Purple represents")
-                st.image(svg, width=240 if compact else 310)
+                if is_split:
+                    first_room, extra_room = st.columns(2, gap="small")
+                    with first_room:
+                        st.image(svg, width=145)
+                        html('<div class="brief-small">Observed group</div>')
+                    with extra_room:
+                        st.image(v.room_capacity_svg(0, second).replace(v.BLUE, "#5F259F").replace("Average attendance while occupied: 0.0 people.", "Illustrative empty diagram; future use is unknown."), width=145)
+                        html('<div class="brief-small">Additional room · untested</div>')
+                else:
+                    st.image(svg, width=240 if compact else 310)
             fit = result["fit_percent"]
             html(f'<div class="brief-layout-score"><strong>{u.fmt(fit, "%", 1)}</strong><span>of observed occupied time fits</span></div>'
                  f'<div class="brief-track"><i class="lead" style="width:{fit or 0:.2f}%"></i></div>'
-                 f'<div class="brief-small">{u.fmt(result["exceeds_hours"], " h", 1)} exceeds this capacity · typical group {u.fmt(evidence["typical"], digits=1)}</div>')
+                 f'<div class="brief-small">{u.fmt(result["exceeds_hours"], " h", 1)} exceeds {"the larger room" if is_split else "this capacity"} · typical group {u.fmt(evidence["typical"], digits=1)}</div>')
+            if is_split:
+                html('<div class="brief-small"><b>Concept only:</b> fit replays existing groups in the larger room. New bookings, simultaneous demand and physical feasibility are unverified.</div>')
     if evidence["coverage"] is None or evidence["coverage"] < 70:
         st.warning("Limited occupancy coverage: this replay is exploratory. Restore reporting before recommending a layout change.")
     next_step = ("Next step: check bookings and peak groups before a layout trial." if qualifies
