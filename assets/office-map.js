@@ -1,3 +1,31 @@
+// Presentation guide bands, not occupancy targets or a thermal-comfort standard.
+// Classify the displayed value so a rounded boundary never contradicts its colour.
+export function mapScore(row, lens) {
+  const raw = row[lens];
+  if (!row.allowed || !Number.isFinite(raw)
+      || (lens === 'usage' && (raw < 0 || raw > 100))
+      || (lens === 'rating' && (raw < 1 || raw > 5))) {
+    return {tone:'unknown', label:'No qualifying data', value:'—'};
+  }
+  const n = lens === 'usage' ? Math.round(raw) : Number(raw.toFixed(lens === 'rating' ? 2 : 1));
+  const value = lens === 'usage' ? n + '%' : lens === 'temperature' ? n.toFixed(1) + '°' : n.toFixed(2);
+  if (lens === 'usage') return n < 20 ? {tone:'rag-red',label:'Low use',value}
+    : n < 40 ? {tone:'rag-amber',label:'Moderate use',value} : {tone:'rag-green',label:'High use',value};
+  if (lens === 'rating') return n < 3 ? {tone:'rag-red',label:'Low sample rating',value}
+    : n < 4 ? {tone:'rag-amber',label:'Mixed sample rating',value} : {tone:'rag-green',label:'Positive sample rating',value};
+  if (lens === 'temperature') return n < 18 || n > 26
+    ? {tone:'rag-red',label:n < 18 ? 'Well below guide range' : 'Well above guide range',value}
+    : n < 20 || n > 24 ? {tone:'rag-amber',label:n < 20 ? 'Below guide range' : 'Above guide range',value}
+    : {tone:'rag-green',label:'Within guide range',value};
+  return {tone:'unknown',label:'No qualifying data',value:'—'};
+}
+
+const mapScales = {
+  usage: ['Low <20%', 'Moderate 20–39%', 'High ≥40%', 'Time in use · guide bands, not targets.'],
+  temperature: ['<18° / >26°', '18–<20° / >24–26°', '20–24°C', 'Mean temperature · illustrative comfort bands.'],
+  rating: ['<3/5', '3–3.99/5', '4–5/5', 'Invented space ratings · at least 5 responses.'],
+};
+
 export default function(component) {
   const { data, parentElement, setTriggerValue } = component;
   const isFit = data.view === 'fit';
@@ -24,16 +52,11 @@ export default function(component) {
   function value(row) {
     if (!row.allowed) return '—';
     if (isImprove) return {controls:'Controls',layout:'Layout',evidence:'Check'}[row.action] || '—';
-    const v = row[lens];
-    if (v === null || v === undefined) return '—';
-    return lens === 'usage' ? Math.round(v) + '%' : lens === 'temperature' ? v.toFixed(1) + '°' : v.toFixed(1);
+    return mapScore(row, lens).value;
   }
   function tone(row) {
     if (isImprove) return row.allowed && row.action ? row.action : 'unknown';
-    if (!row.allowed || row[lens] === null || row[lens] === undefined) return 'unknown';
-    if (lens === 'temperature') return 'temperature';
-    if (lens === 'rating') return 'rating';
-    return 'usage';
+    return mapScore(row, lens).tone;
   }
   function select(row) {
     if (!row.allowed) return;
@@ -73,11 +96,24 @@ export default function(component) {
       pin.setAttribute('aria-pressed', String(row.id === selected));
       label.setAttribute('aria-pressed', String(row.id === selected));
       pin.dataset.tone = tone(row);
+      label.dataset.tone = tone(row);
       pin.querySelector('strong').textContent = value(row);
-      pin.setAttribute('aria-label', row.name + ', ' + products(row) + ', ' + lens + ' ' + value(row));
-      pin.title = row.name + ' · ' + products(row);
+      const status = isImprove ? row.action_label : mapScore(row, lens).label;
+      const description = row.name + ', ' + products(row) + ', ' + lens + ' ' + value(row) + ', ' + status;
+      pin.setAttribute('aria-label', description);
+      label.setAttribute('aria-label', description);
+      pin.title = label.title = description;
     });
-    root.querySelector('.map-legend').textContent = isImprove ? 'Green: controls · Purple: layout · Gold: evidence first. Select a room to see its next step.' : isExperience ? 'Invented space ratings / 5. At least 5 responses are needed; — means too few or none. Purple outline: room on the companion.' : isFit ? 'Map percentages show time in use. Purple outlines mark the selected room; — means insufficient usage evidence.' : lens === 'usage' ? 'Time in use · — means no qualifying room-use evidence' : lens === 'temperature' ? 'Mean °C · recorded conditions, not a comfort pass/fail · — means no single reading' : 'Invented space ratings / 5 · at least 5 responses · — means no qualifying sample';
+    const legend = root.querySelector('.map-legend');
+    if (isImprove) {
+      legend.textContent = 'Green: controls · Purple: layout · Gold: evidence first. Select a room to see its next step.';
+    } else {
+      const scale = mapScales[lens];
+      legend.innerHTML = '<div class="map-scale">' + ['red','amber','green'].map((colour, index) =>
+        '<span><i class="rag-' + colour + '"></i>' + scale[index] + '</span>').join('')
+        + '<span><i class="unknown"></i>— No data</span></div>'
+        + '<div class="map-scale-note">' + scale[3] + ' Purple outline: ' + (isExperience ? 'companion room.' : 'selected room.') + '</div>';
+    }
   }
   root.querySelectorAll('[data-lens]').forEach(b => b.onclick = () => {
     lens = b.dataset.lens; stateHost.dataset.officeLens = lens; draw();
