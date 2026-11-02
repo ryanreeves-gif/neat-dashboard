@@ -23,6 +23,7 @@
 .map-label[aria-pressed=true] .map-letter{outline:2px solid #5F259F;outline-offset:2px}
 .map-label-copy{min-width:0}.map-label b{display:block;font-size:12px;line-height:1.18;font-weight:700;margin-bottom:3px;overflow-wrap:anywhere}.map-label small{display:block;font-size:11px;line-height:1.24;color:#4C515C;overflow-wrap:anywhere}
 .map-legend{font-size:11px;line-height:1.4;color:#4C515C;margin-top:10px}
+.office-map-widget:not(.office-map-improve) .map-legend{margin:0 0 10px}
 .map-scale{display:flex;flex-wrap:wrap;gap:5px 11px}.map-scale>span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.map-scale i{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none}.map-scale-note{margin-top:5px}
 @container(max-width:470px){.map-grid{grid-template-columns:1fr}.map-picture{max-width:330px}.map-labels{display:grid;grid-template-columns:1fr 1fr;gap:5px}}
 @container(max-width:310px){.map-labels{grid-template-columns:1fr}}

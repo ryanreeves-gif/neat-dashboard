@@ -41,6 +41,9 @@ export default function(component) {
   root.innerHTML = `<div class="map-toolbar" aria-label="Map measure"><button type="button" data-lens="usage" aria-pressed="true">Usage</button><button type="button" data-lens="temperature" aria-pressed="false">Temperature</button><button type="button" data-lens="rating" aria-pressed="false">Sentiment · sample</button></div><div class="map-grid"><div class="map-picture"><img alt="London office illustration with room positions confirmed by Ryan"><div class="map-pins"></div></div><div class="map-labels" aria-label="Spaces and Neat products"></div></div><div class="map-legend" aria-live="polite"></div>`;
   root.querySelector('img').src = data.image;
   root.querySelector('.map-toolbar').hidden = isCompact;
+  // Keep score ranges visible beside the view choice, even when product labels
+  // make the map tall. The action map retains its existing explanatory footer.
+  if (!isImprove) root.querySelector('.map-grid').before(root.querySelector('.map-legend'));
   const pins = root.querySelector('.map-pins');
   const labels = root.querySelector('.map-labels');
   // Streamlit supplies a ShadowRoot when style isolation is enabled. Store
